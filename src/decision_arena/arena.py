@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import statistics
-import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
@@ -64,10 +63,12 @@ def seats(models: list[Model]) -> list[Seat]:
     return out
 
 
-async def _timed(model: Model, question: Question) -> tuple[Answer, float]:
-    started = time.monotonic()
+async def _timed(model: Model, question: Question) -> tuple[Answer, float, float]:
+    """The answer, how long it took, and when it arrived on the loop's clock."""
+    loop = asyncio.get_running_loop()
+    started = loop.time()
     answer = await model.decide(question)
-    return answer, time.monotonic() - started
+    return answer, loop.time() - started, loop.time()
 
 
 async def play(game: Game, players: list[Seat], settings: Settings, emit: Emit, number: int) -> None:
@@ -96,9 +97,12 @@ async def play(game: Game, players: list[Seat], settings: Settings, emit: Emit, 
             answer = None
             if task not in pending:
                 try:
-                    answer, latency = task.result()
+                    answer, latency, arrived = task.result()
                 except Exception as exc:  # a failed answer is a missed tick, never a crash
                     log.warning("%s: %s", seat.name, exc)
+                else:
+                    if settings.clock and arrived > started + settings.tick:
+                        answer = None  # finished, but after the tick ended
             if answer is None or answer.move not in ("left", "straight", "right"):
                 seat.missed += 1
                 decisions[i] = {"move": "straight", "missed": True}

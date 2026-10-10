@@ -7,6 +7,8 @@ import asyncio
 import contextlib
 import json
 import logging
+import threading
+import time
 import webbrowser
 from importlib.resources import files
 from typing import Any
@@ -26,7 +28,9 @@ class Arena:
 
     def __init__(self, models: list[Model], settings: Settings) -> None:
         self.models, self.settings = models, settings
-        self.pages: set[WebSocket] = set()
+        # Each open page has its own outbox, so a page that stops reading never holds up
+        # the game clock; one that falls this far behind stops receiving.
+        self.pages: dict[WebSocket, asyncio.Queue[str]] = {}
         self.running: asyncio.Task[Any] | None = None
 
     def start(self) -> None:
@@ -35,11 +39,17 @@ class Arena:
 
     async def send(self, message: dict[str, Any]) -> None:
         text = json.dumps(message)
-        for page in list(self.pages):
+        for page, outbox in list(self.pages.items()):
             try:
-                await page.send_text(text)
-            except Exception:  # a closed page drops out
-                self.pages.discard(page)
+                outbox.put_nowait(text)
+            except asyncio.QueueFull:
+                self.pages.pop(page, None)
+
+
+async def _deliver(page: WebSocket, outbox: asyncio.Queue[str]) -> None:
+    with contextlib.suppress(Exception):  # a closed page is cleaned up by its handler
+        while True:
+            await page.send_text(await outbox.get())
 
 
 def app(arena: Arena) -> Starlette:
@@ -50,7 +60,6 @@ def app(arena: Arena) -> Starlette:
 
     async def socket(websocket: WebSocket) -> None:
         await websocket.accept()
-        arena.pages.add(websocket)
         await websocket.send_text(
             json.dumps(
                 {
@@ -61,12 +70,18 @@ def app(arena: Arena) -> Starlette:
                 }
             )
         )
+        outbox: asyncio.Queue[str] = asyncio.Queue(maxsize=32)
+        arena.pages[websocket] = outbox
+        delivery = asyncio.create_task(_deliver(websocket, outbox))
         try:
             while True:
                 if json.loads(await websocket.receive_text()).get("type") == "start":
                     arena.start()
         except WebSocketDisconnect:
-            arena.pages.discard(websocket)
+            pass
+        finally:
+            arena.pages.pop(websocket, None)
+            delivery.cancel()
 
     return Starlette(routes=[Route("/", index), WebSocketRoute("/ws", socket)])
 
@@ -107,12 +122,18 @@ def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
     print(f"Decision Arena at {url}")
 
-    @contextlib.asynccontextmanager
-    async def opened(_app: Starlette) -> Any:
-        if not args.no_browser:
-            webbrowser.open(url)
-        yield
+    server = uvicorn.Server(
+        uvicorn.Config(app(arena), host="127.0.0.1", port=args.port, log_level="warning")
+    )
+    if not args.no_browser:
+        threading.Thread(target=_open_when_listening, args=(server, url), daemon=True).start()
+    with contextlib.suppress(KeyboardInterrupt):  # Ctrl+C ends the demo quietly
+        server.run()
 
-    application = app(arena)
-    application.router.lifespan_context = opened
-    uvicorn.run(application, host="127.0.0.1", port=args.port, log_level="warning")
+
+def _open_when_listening(server: uvicorn.Server, url: str) -> None:
+    while not server.started:
+        if server.should_exit:
+            return
+        time.sleep(0.05)
+    webbrowser.open(url)

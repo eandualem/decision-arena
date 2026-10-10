@@ -1,3 +1,5 @@
+import asyncio
+
 from starlette.testclient import TestClient
 
 from decision_arena.arena import Settings
@@ -22,3 +24,16 @@ def test_page_starts_a_series_and_receives_frames():
                 messages.append(ws.receive_json())
     assert messages[0]["type"] == "frame" and messages[0]["tick"] == 0
     assert any(m.get("over") for m in messages)
+
+
+def test_a_page_that_stops_reading_drops_out_without_blocking():
+    arena = Arena([Greedy(0), Greedy(1)], Settings())
+
+    async def go():
+        stuck = asyncio.Queue(maxsize=1)
+        arena.pages["stuck"] = stuck
+        await arena.send({"type": "frame"})
+        await asyncio.wait_for(arena.send({"type": "frame"}), 0.1)
+
+    asyncio.run(go())
+    assert arena.pages == {}

@@ -1,4 +1,6 @@
 import asyncio
+import time
+from itertools import pairwise
 
 from decision_arena.arena import Settings, play, seats, series
 from decision_arena.game import Game
@@ -104,6 +106,19 @@ def test_frames_land_on_tick_boundaries_whatever_the_models_do():
             pass
 
     asyncio.run(go())
-    gaps = [b - a for a, b in zip(times[1:], times[2:])]  # after the opening frame
+    gaps = [b - a for a, b in pairwise(times[1:])]  # after the opening frame
     assert len(gaps) >= 4
     assert all(0.04 < gap < 0.08 for gap in gaps)
+
+
+class Blocking:
+    name = "Blocking"
+
+    async def decide(self, question):
+        time.sleep(0.08)  # holds the event loop past the tick, then answers
+        return Answer("left", {"left": 1.0, "straight": 0.0, "right": 0.0})
+
+
+def test_an_answer_finished_after_the_tick_is_missed_even_if_it_blocked_the_clock():
+    players, _ = run([Greedy(0), Blocking()], Settings(tick=0.05))
+    assert players[1].missed == players[1].asked > 0
