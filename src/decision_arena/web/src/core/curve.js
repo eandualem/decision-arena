@@ -38,6 +38,7 @@ export function installCurvedWorld() {
   }
   THREE.ShaderChunk.project_vertex = chunk.replace(target, /* glsl */`
 #if defined( USE_CURVE ) && !defined( DEPTH_PACKING ) && !defined( DISTANCE ) && !defined( NO_CURVE )
+	vec4 cwUnbent = mvPosition;   // Decision Arena: clipping planes test the unbent position (see below)
 	{
 		float cwDepth = max( 0.0, -mvPosition.z - uCurve.z );
 		float cwD2 = cwDepth * cwDepth;
@@ -46,6 +47,17 @@ export function installCurvedWorld() {
 	}
 #endif
 	${target}`);
+  // Decision Arena: clipping planes are placed in the unbent world, so test them against unbent positions;
+  // otherwise a cut drifts from where it was put as the bend grows with distance.
+  const clip = '\tvClipPosition = - mvPosition.xyz;';
+  if (THREE.ShaderChunk.clipping_planes_vertex.includes(clip)) {
+    THREE.ShaderChunk.clipping_planes_vertex = THREE.ShaderChunk.clipping_planes_vertex.replace(clip, /* glsl */`
+#if defined( USE_CURVE ) && !defined( DEPTH_PACKING ) && !defined( DISTANCE ) && !defined( NO_CURVE )
+	vClipPosition = - cwUnbent.xyz;
+#else
+	vClipPosition = - mvPosition.xyz;
+#endif`);
+  } else console.warn('[curve] clipping_planes_vertex chunk changed; clipping uses bent positions');
   THREE.Material.prototype.onBeforeCompile = function (shader) { applyCurve(shader); };
 }
 

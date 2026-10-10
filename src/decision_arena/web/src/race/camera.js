@@ -174,7 +174,7 @@ export class PackCamera {
       case 'winner': {   // circling slowly behind the winner, so the collapse stays behind the camera
         const w = this.race.winner || a;
         const ang = 0.35 + Math.min(this.shotT, 12) * 0.06;
-        out.pos.set(Math.sin(ang) * 6, w.b.y + 2.3, w.b.z + Math.cos(ang) * 6);
+        out.pos.set(Math.sin(ang) * 6, w.b.y + 4, w.b.z + Math.cos(ang) * 6);   // above any train alongside
         out.look.set(w.b.x, w.b.y + 1.1, w.b.z - 2);
         out.fov = 50;
         break;
