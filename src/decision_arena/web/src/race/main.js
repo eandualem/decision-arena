@@ -86,13 +86,17 @@ resize();
 const race = ctx.game;
 const start = () => { ctx.audio.unlock?.(); race.go(); };
 const hud = new Hud(ctx, race, { onStart: start });
+ctx.hud = hud;
 const runners = Math.max(2, Math.min(6, +params.get('runners') || 4));
 race.setup(botSeats(runners));
 hud.build();
 hud._onState(race.state);
 addEventListener('keydown', (e) => {
-  if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); start(); }
-  if (e.code === 'KeyC') race.camera.toggleView();
+  if (e.repeat || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey ||
+      e.target.closest?.('input, select, textarea, [contenteditable]')) return;
+  if ((e.code === 'Space' || e.code === 'Enter') && !e.target.closest?.('button')) { e.preventDefault(); start(); }
+  if (e.code === 'KeyC') hud.toggleCamera();
+  if (e.code === 'KeyM') hud.toggleSound();
 });
 document.addEventListener('visibilitychange', () => ctx.audio.setSuspended?.(document.hidden));
 

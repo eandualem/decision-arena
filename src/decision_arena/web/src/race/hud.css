@@ -1,0 +1,182 @@
+/* Race presentation. All art comes from the running scene and character portraits. */
+#hud {
+  --ink: #f4f6ff; --muted: #aab5c9; --accent: #d5ff5f; --panel: rgba(13, 19, 33, .9); --row-height: 44px;
+  position: fixed; inset: 0; pointer-events: none; color: var(--ink);
+  font-family: 'Nunito', system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+  font-variant-numeric: tabular-nums;
+}
+#hud * { box-sizing: border-box; }
+#hud [hidden] { display: none !important; }
+#hud h1, #hud h2, #hud p { margin: 0; }
+#hud .eyebrow { font-size: 10px; font-weight: 900; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+#hud .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(5, 10, 22, .88), rgba(5, 10, 22, .08) 80%), linear-gradient(0deg, rgba(5, 10, 22, .88), transparent 50%); transition: opacity .4s; }
+#hud[data-state="running"] .shade, #hud[data-state="intro"] .shade { opacity: 0; }
+#hud .topbar { position: absolute; top: 26px; left: 32px; right: 32px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+#hud .brand { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 1000; letter-spacing: .08em; }
+#hud .brand svg { width: 25px; height: 25px; color: var(--accent); }
+#hud .session { display: flex; align-items: center; gap: 8px; font-size: 10px; font-weight: 900; letter-spacing: .12em; color: #d4dce9; }
+#hud .session i { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+#hud .toolbar { position: absolute; bottom: 24px; left: 32px; right: 32px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+#hud .controls { display: flex; gap: 8px; }
+#hud button { pointer-events: auto; cursor: pointer; font: inherit; color: inherit; }
+#hud button:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+#hud .control { background: rgba(10, 17, 30, .84); border: 1px solid #fff3; border-radius: 7px; padding: 9px 12px; font-size: 11px; font-weight: 800; min-height: 38px; }
+#hud .control:hover { background: #273449; }
+#hud kbd { font: inherit; font-size: 10px; color: #d5ff5f; border: 1px solid #ffffff30; border-radius: 3px; padding: 1px 4px; margin-right: 6px; }
+#hud .engine { font-size: 10px; color: #c0c9d8; letter-spacing: .1em; text-transform: uppercase; text-shadow: 0 1px 4px #000; }
+#hud .lobby { position: absolute; inset: 112px 48px 92px; }
+#hud .intro-copy { max-width: 500px; }
+#hud .intro-copy .eyebrow { color: var(--accent); margin-bottom: 16px; }
+#hud h1 { font-family: 'Arial Black', 'Nunito', sans-serif; font-size: clamp(48px, 6.7vw, 90px); font-weight: 1000; font-style: italic; line-height: .92; letter-spacing: -.065em; text-transform: uppercase; }
+#hud h1 span { color: var(--accent); display: block; }
+#hud .intro-copy p { max-width: 340px; margin: 20px 0 22px; font-size: 15px; line-height: 1.5; color: #d5ddeb; }
+#hud .primary { display: inline-flex; align-items: center; justify-content: space-between; gap: 26px; border: 0; border-radius: 6px; background: var(--accent); color: #111c0b; font-size: 14px; font-weight: 1000; text-transform: uppercase; letter-spacing: .05em; padding: 17px 22px; box-shadow: 0 4px 0 #77942c; transition: transform .15s, filter .15s; }
+#hud .primary:hover { filter: brightness(1.1); transform: translateY(-2px); }
+#hud .primary:active { transform: translateY(2px); box-shadow: 0 2px 0 #77942c; }
+#hud .primary b { font-size: 22px; line-height: 16px; }
+#hud .start-hint { margin-left: 14px; color: #b7c1d3; font-size: 11px; }
+#hud .roster-wrap { position: absolute; bottom: 0; left: 0; right: 0; }
+#hud .roster-title { display: flex; justify-content: space-between; margin-bottom: 10px; }
+#hud .roster { display: grid; grid-template-columns: repeat(var(--count), 1fr); gap: 10px; }
+#hud .entrant { position: relative; min-width: 0; height: 108px; overflow: hidden; border: 1px solid #ffffff20; border-bottom: 3px solid var(--runner); border-radius: 8px; background: linear-gradient(120deg, #202a3ae6, #0a111ee6); padding: 15px 12px; }
+#hud .entrant img { position: absolute; width: 110px; height: 110px; object-fit: contain; right: -24px; top: 1px; }
+#hud .entrant .seat { color: var(--runner); font-size: 11px; font-weight: 1000; }
+#hud .entrant strong { display: block; position: relative; font-size: 17px; margin-top: 8px; }
+#hud .entrant small { display: block; position: relative; font-size: 10px; color: #bdc7d8; }
+#hud .race-ui { position: absolute; inset: 0; }
+#hud .board { position: absolute; top: 86px; left: 24px; width: 238px; padding: 13px 10px 10px; border: 1px solid #ffffff24; border-radius: 10px; background: var(--panel); box-shadow: 0 8px 30px #0003; }
+#hud .board-head { display: flex; justify-content: space-between; margin: 0 5px 10px; }
+#hud .board-head .round { font-size: 10px; color: var(--accent); font-weight: 900; }
+#hud .rows { position: relative; }
+#hud .row { position: absolute; inset: 0 0 auto; height: var(--row-height); display: grid; grid-template-columns: 22px 4px 1fr auto; gap: 9px; align-items: center; padding: 4px 6px; border-radius: 5px; transition: transform .4s cubic-bezier(.2,.8,.2,1), opacity .3s, background .25s; }
+#hud .row.leader { background: #ffffff0c; }
+#hud .row.out { opacity: .4; }
+#hud .row.down { background: #ff765022; }
+#hud .pos { font-size: 18px; font-style: italic; font-weight: 1000; color: #adb9cd; }
+#hud .row.leader .pos { color: var(--accent); }
+#hud .stripe { height: 24px; background: var(--runner); border-radius: 2px; }
+#hud .identity { min-width: 0; }
+#hud .name { display: block; font-size: 13px; font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#hud .row .gap { font-size: 11px; color: #c7d1e3; }
+#hud .row.down .gap { color: #ffad82; }
+#hud .pace { margin-top: 4px; display: block; height: 2px; background: #ffffff10; }
+#hud .pace i { display: block; background: var(--runner); height: 100%; transform-origin: left; transition: transform .18s linear; }
+#hud .telemetry { position: absolute; right: 28px; top: 86px; display: flex; background: var(--panel); border: 1px solid #ffffff24; border-radius: 8px; padding: 11px 0; }
+#hud .metric { padding: 0 18px; min-width: 90px; }
+#hud .metric + .metric { border-left: 1px solid #ffffff20; }
+#hud .metric strong { display: block; font-size: 25px; line-height: 1.15; font-weight: 900; }
+#hud .metric .eyebrow { font-size: 9px; }
+#hud .shot-label { position: absolute; top: 66px; right: 32px; font-size: 9px; font-weight: 900; letter-spacing: .14em; text-transform: uppercase; text-shadow: 0 1px 5px #000; }
+#hud .edge-watch { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%); width: 280px; border: 1px solid #ffffff26; border-radius: 8px; background: var(--panel); padding: 11px 14px; }
+#hud .edge-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+#hud .edge-head strong { font-size: 11px; font-weight: 900; }
+#hud .edge-track { margin: 8px 0 5px; height: 4px; overflow: hidden; background: #ffffff12; border-radius: 3px; }
+#hud .edge-track i { display: block; background: var(--accent); height: 100%; transform-origin: left; transition: transform .15s linear, background .3s; }
+#hud .edge-note { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); }
+#hud .edge-watch.danger { border-color: #ff866880; }
+#hud .edge-watch.danger .edge-track i { background: #ff8668; }
+#hud .edge-watch.danger .edge-head strong { color: #ffad94; }
+#hud .tag { position: absolute; left: 0; top: 0; display: flex; align-items: center; gap: 6px; padding: 4px 8px; background: #0d1321df; border: 1px solid #ffffff45; border-bottom: 2px solid var(--runner); border-radius: 5px; white-space: nowrap; font-size: 11px; font-weight: 900; will-change: transform; }
+#hud .tag b { color: var(--runner); font-size: 10px; }
+#hud .tag-status { color: #ffbb9f; font-size: 9px; }
+#hud .callout { position: absolute; left: 50%; top: 92px; transform: translate(-50%, -8px); text-align: center; opacity: 0; transition: opacity .18s, transform .25s; min-width: 210px; max-width: 340px; background: #0d1321e8; border: 1px solid #ffffff30; border-top: 3px solid var(--callout, var(--accent)); padding: 12px 22px; border-radius: 6px; }
+#hud .callout.show { transform: translate(-50%, 0); opacity: 1; }
+#hud .callout strong { display: block; font-size: 24px; font-weight: 1000; letter-spacing: -.03em; }
+#hud .callout small { font-size: 11px; color: #bdc8da; }
+#hud .countdown { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+#hud .countdown strong { font-family: 'Arial Black', 'Nunito', sans-serif; font-size: clamp(100px, 20vw, 220px); font-style: italic; line-height: 1; color: var(--accent); text-shadow: 0 8px 0 #12200966; animation: count-in .7s cubic-bezier(.16,1,.3,1) both; }
+#hud .countdown .eyebrow { color: white; text-shadow: 0 2px 10px #000; }
+#hud .results { position: absolute; inset: 100px 48px 90px; display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 48px; }
+#hud .champion { position: relative; padding-top: 28px; }
+#hud .champion .eyebrow { color: var(--winner); }
+#hud .champion h2 { position: relative; font-size: clamp(48px, 6vw, 80px); font-weight: 1000; font-style: italic; line-height: 1; letter-spacing: -.055em; }
+#hud .champion p { color: #c9d4e7; font-size: 14px; margin: 8px 0 18px; }
+#hud .champion-art { display: block; width: 190px; height: 190px; object-fit: contain; margin: -10px 0 0; filter: drop-shadow(0 10px 35px #0004); }
+#hud .champion-facts { display: flex; gap: 24px; margin: 0 0 24px; }
+#hud .champion-facts strong { display: block; font-size: 22px; }
+#hud .classification { background: #0d1321eb; border: 1px solid #ffffff30; border-radius: 12px; padding: 24px; }
+#hud .classification h2 { font-size: 23px; font-weight: 1000; letter-spacing: -.03em; margin: 5px 0 20px; }
+#hud .result-head, #hud .result-row { display: grid; grid-template-columns: 26px 1fr 62px 48px 42px; gap: 8px; align-items: center; }
+#hud .result-head { padding: 0 8px 8px; font-size: 9px; letter-spacing: .04em; color: var(--muted); text-transform: uppercase; }
+#hud .result-head span:nth-child(n+3), #hud .result-row span:nth-child(n+3) { text-align: right; }
+#hud .result-row { height: 48px; padding: 0 8px; border-top: 1px solid #ffffff12; font-size: 12px; }
+#hud .result-row.first { background: #ffffff0b; border-radius: 5px; }
+#hud .result-name { font-weight: 900; border-left: 3px solid var(--runner); padding-left: 9px; overflow: hidden; text-overflow: ellipsis; }
+#hud .result-foot { margin-top: 16px; font-size: 10px; color: var(--muted); line-height: 1.5; }
+#hud .finish-shade { opacity: 0; }
+#hud[data-results="true"] .finish-shade { opacity: 1; }
+@keyframes count-in { from { opacity: 0; transform: scale(1.45); } 20% { opacity: 1; } to { opacity: 1; transform: scale(1); } }
+@media (min-width: 1500px) { #hud .lobby { inset: 15vh 5vw 110px; } #hud .entrant { height: 140px; padding: 24px; } #hud .entrant img { width: 150px; height: 150px; right: -15px; } }
+@media (max-width: 900px) {
+  #hud .lobby { inset: 100px 28px 84px; } #hud .intro-copy { max-width: 380px; }
+  #hud .entrant { padding: 12px 9px; height: 96px; } #hud .entrant img { opacity: .55; right: -28px; }
+  #hud .results { inset: 100px 28px 85px; gap: 22px; grid-template-columns: .8fr 1.2fr; }
+  #hud .classification { padding: 16px; } #hud .champion-art { width: 160px; height: 160px; }
+  #hud .board { width: 200px; } #hud .callout { top: 160px; }
+}
+@media (max-width: 600px) {
+  #hud .topbar { top: 18px; left: 18px; right: 18px; } #hud .brand { font-size: 10px; gap: 6px; } #hud .brand svg { width: 20px; }
+  #hud .session { font-size: 8px; letter-spacing: .06em; } #hud .session .local { display: none; }
+  #hud .toolbar { left: 16px; right: 16px; bottom: 14px; } #hud .engine { display: none; }
+  #hud .control { font-size: 10px; padding: 9px 10px; } #hud .lobby { inset: 84px 22px 74px; }
+  #hud h1 { font-size: 60px; } #hud .intro-copy p { font-size: 13px; max-width: 260px; margin: 14px 0 18px; }
+  #hud .primary { padding: 14px 18px; font-size: 12px; } #hud .start-hint { display: none; }
+  #hud .roster { grid-template-columns: repeat(3, 1fr); gap: 6px; } #hud .entrant { height: 85px; }
+  #hud .entrant strong { font-size: 14px; margin-top: 5px; } #hud .entrant small { font-size: 9px; }
+  #hud .entrant img { width: 95px; height: 95px; } #hud .roster-title .eyebrow { font-size: 8px; letter-spacing: .09em; }
+  #hud .board { top: 63px; left: 12px; width: 163px; padding: 10px 5px 5px; }
+  #hud .row { grid-template-columns: 18px 3px 1fr auto; gap: 5px; padding: 4px; }
+  #hud .name { font-size: 11px; } #hud .row .gap { font-size: 9px; } #hud .pos { font-size: 15px; }
+  #hud .board-head .eyebrow { font-size: 8px; } #hud .board-head .round { font-size: 8px; }
+  #hud .telemetry { top: 63px; right: 12px; padding: 8px 0; } #hud .metric { padding: 0 10px; min-width: 65px; }
+  #hud .metric strong { font-size: 20px; } #hud .metric .eyebrow { font-size: 8px; }
+  #hud .shot-label { top: 122px; right: 14px; font-size: 8px; }
+  #hud .callout { top: auto; bottom: 171px; min-width: 190px; padding: 8px 14px; }
+  #hud .callout strong { font-size: 20px; } #hud .edge-watch { bottom: 68px; width: 250px; }
+  #hud .tag { font-size: 10px; padding: 3px 5px; gap: 4px; } #hud .tag-status { display: none; }
+  #hud .results { inset: 70px 18px 70px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; pointer-events: auto; align-items: stretch; }
+  #hud .champion { padding: 0 0 0 106px; min-height: 165px; }
+  #hud .champion-art { position: absolute; top: 15px; left: -10px; width: 115px; height: 145px; }
+  #hud .champion h2 { font-size: 46px; } #hud .champion p { font-size: 12px; margin: 4px 0 12px; }
+  #hud .champion-facts { gap: 18px; margin: 0 0 14px; } #hud .champion-facts strong { font-size: 18px; }
+  #hud .champion-facts .eyebrow { font-size: 8px; }
+  #hud .classification { padding: 14px; } #hud .classification h2 { font-size: 20px; margin-bottom: 12px; }
+  #hud .result-row { height: 39px; } #hud .result-head, #hud .result-row { grid-template-columns: 20px 1fr 55px 38px 35px; gap: 6px; }
+}
+@media (max-height: 650px) {
+  #hud .lobby { top: 75px; bottom: 72px; } #hud h1 { font-size: 48px; } #hud .intro-copy .eyebrow { margin-bottom: 10px; }
+  #hud .intro-copy p { margin: 10px 0 15px; font-size: 12px; } #hud .entrant { height: 75px; padding: 8px; }
+  #hud .entrant strong { margin-top: 2px; } #hud .entrant img { height: 88px; width: 88px; }
+  #hud .results { top: 72px; } #hud .champion-art { height: 110px; width: 110px; }
+  #hud .classification { padding: 14px; } #hud .classification h2 { margin-bottom: 12px; } #hud .result-row { height: 38px; }
+}
+@media (max-height: 540px) {
+  #hud { --row-height: 30px; }
+  #hud .board { top: 70px; width: 190px; }
+  #hud .row { padding-top: 2px; padding-bottom: 2px; }
+  #hud .row .name { font-size: 11px; } #hud .row .gap { font-size: 10px; } #hud .stripe { height: 18px; }
+  #hud .lobby { overflow-y: auto; pointer-events: auto; } #hud .roster-wrap { position: relative; margin-top: 28px; }
+  #hud .results { overflow-y: auto; pointer-events: auto; align-items: start; }
+}
+@media (max-height: 540px) and (min-width: 601px) {
+  #hud .lobby { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+  #hud .roster-wrap { margin-top: 0; align-self: center; }
+  #hud .roster { grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  #hud .entrant { height: 64px; } #hud .entrant img { width: 80px; height: 80px; }
+  #hud .entrant strong { font-size: 14px; } #hud .entrant small { font-size: 9px; }
+  #hud .roster-title .eyebrow { font-size: 8px; letter-spacing: .05em; }
+  #hud .results { overflow: visible; }
+  #hud .champion { padding-top: 0; }
+  #hud .champion-art { position: absolute; top: 16px; right: -12px; width: 90px; height: 90px; }
+  #hud .champion h2 { font-size: 46px; } #hud .champion p { font-size: 12px; }
+  #hud .champion-facts { margin-bottom: 18px; gap: 16px; }
+  #hud .champion-facts .eyebrow { font-size: 8px; }
+  #hud .classification { max-height: 100%; overflow-y: auto; }
+}
+@media (max-height: 650px) and (max-width: 600px) {
+  #hud .lobby { overflow-y: auto; pointer-events: auto; }
+  #hud .roster-wrap { position: relative; margin-top: 26px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #hud *, #hud *::before, #hud *::after { transition: none !important; animation: none !important; }
+}

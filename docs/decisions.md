@@ -89,3 +89,23 @@ simulated races last about 20 to 45 seconds.
 
 **Why.** The demo runs with no keys at all, and the bots are a baseline the
 models have to beat.
+
+## 5. Race presentation
+
+**Choice.** Frame the offline race as a bot exhibition. Before the start, show
+the runners and each bot's configured reaction delay. During the race, keep
+animated standings at the edge of the screen, mark crashes and eliminations,
+and show how much ground the last runner has before the collapse. Brief
+callouts highlight a change of leader and the final two. At the finish, leave
+the winner visible for a moment before showing every runner's placing,
+survival time, coins and crashes. Camera and sound controls work by button or
+keyboard (**C** and **M**).
+
+**Why.** A viewer should understand the stakes and the result without knowing
+the game. The lineup uses portraits rendered from the existing characters,
+and the overlays use existing race state and events. Presentation does not
+slow the simulation, change the race rules or imply that live models are
+connected. The configured bot delay is not a measured model latency.
+
+**Rejected.** Full-screen effects and simulation slow motion on every crash:
+they obscure the pack and would distort the real-time speed comparison.
