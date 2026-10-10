@@ -20,7 +20,7 @@ from starlette.responses import HTMLResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from decision_arena import apis
+from decision_arena import apis, local
 from decision_arena.arena import Settings, seats, series
 from decision_arena.models import Greedy, Model
 
@@ -28,6 +28,7 @@ from decision_arena.models import Greedy, Model
 MODELS: dict[str, Callable[[], Model]] = {
     "greedy": Greedy,
     "jev": apis.jev,
+    "laya": local.laya,
     "openai": apis.openai,
     "perplexity": apis.perplexity,
 }

@@ -34,6 +34,7 @@ class DecisionAPI:
         key: str,
         shape: str = "systemone",  # or "openai"
         transport: httpx.AsyncBaseTransport | None = None,
+        local: bool = False,  # on this computer: reached directly, never through a proxy
     ) -> None:
         self.name, self._url, self._model, self._shape = name, url, model, shape
         self._key = key
@@ -41,6 +42,7 @@ class DecisionAPI:
             transport=transport,
             headers={"Authorization": f"Bearer {key}"},
             timeout=10.0,  # for no-clock games; under the clock the tick ends the request
+            trust_env=not local,
         )
 
     async def decide(self, question: Question) -> Answer:
