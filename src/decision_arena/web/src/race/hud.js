@@ -153,6 +153,7 @@ export class Hud {
     tag.style.display = '';
     tag.style.left = `${(v.x * 0.5 + 0.5) * innerWidth}px`;
     tag.style.top = `${(-v.y * 0.5 + 0.5) * innerHeight}px`;
+    if (r.fly && !r.rig.object.visible) { tag.style.display = 'none'; return; }   // knocked off the track
     tag.style.opacity = r.status === 'caught' ? '0.45' : '1';
     tag.querySelector('b').textContent = ORDINAL[r.place - 1] || '';
   }

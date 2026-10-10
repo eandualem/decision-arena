@@ -39,17 +39,24 @@ watch and practical for only two to four players.
 - **Crashes.** A crash knocks a runner down for 0.7 s. It then gets up and
   runs through obstacles for 2 s while it gets going again. A crash costs
   ground rather than ending the race.
-- **The sweeper.** A track-cleaning machine as wide as the track follows the
-  pack. It is at most 30 m behind the leader at the start, closing to 6 m.
-  Whoever it reaches is out, so a crash early in the race can be survived
-  and a crash late in it cannot. The last runner left wins.
+- **The chaser.** A runaway locomotive as wide as the track follows the
+  pack, smashing through any obstacle it reaches. It is at most 30 m behind
+  the leader at the start, closing to 6 m. Whoever it reaches is knocked off
+  the track and out, so a crash early in the race can be survived and a
+  crash late in it cannot. The last runner left wins.
+- **The camera.** A broadcast view from the right of the track pans with the
+  pack, so every runner is side by side on screen and you can see who falls
+  behind and the train closing in. The near side of the scenery is cut away
+  at the edge of the track, like a diorama. **C** switches to a view from
+  behind.
 
 **Why.** Every rule creates contact between runners: overtakes, blocks,
 comebacks and a pressure that rises over the race.
 
 **Rejected.** Ending a runner's race on its first crash, as Rail Dash does.
 In simulated races most runners went out within seconds, and the sweeper
-never mattered.
+never mattered. A low sweeping machine as the chaser, and a camera behind
+the pack: the maintainer found both hard to read.
 
 ## 3. How a model decides: no ticks
 

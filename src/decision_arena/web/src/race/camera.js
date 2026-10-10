@@ -1,5 +1,23 @@
-// Pack camera: faces the start grid before the race, then follows from behind and above so the whole pack
-// stays in view, widening as the runners spread out. Keeps inside the scenery-free corridor.
+// Pack camera: faces the start grid before the race, then follows the pack. Two views: 'side', a broadcast
+// view from the right of the track that pans with the pack (the default), and 'chase', from behind and above.
+// The side camera stands outside the track: everything on the near side of the corridor is cut away (a world
+// clipping plane at the corridor edge, with a soil skirt below it), so the race reads like a diorama with the
+// far side's buildings as the backdrop.
+const EDGE = 4.8;           // the corridor's right edge: scenery starts here
+const SIDE_CURVE = 0.0004;  // the world bends down toward the horizon; much less in the side view
+const DEG = 180 / Math.PI;
+
+function soilTexture() {
+  const c = document.createElement('canvas');
+  c.width = 8; c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 256);
+  grd.addColorStop(0, '#8a7558'); grd.addColorStop(0.04, '#5b4632'); grd.addColorStop(0.35, '#3a2a20'); grd.addColorStop(1, '#1d1420');
+  g.fillStyle = grd; g.fillRect(0, 0, 8, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
 import * as THREE from 'three';
 import { clamp, lerp, damp } from '../core/utils.js';
 
@@ -11,6 +29,7 @@ export class PackCamera {
     this.race = race;
     this.cam = ctx.camera;
     this.mode = 'grid';
+    this.view = ctx.params?.get?.('view') === 'chase' ? 'chase' : 'side';
     this.pos = new THREE.Vector3(0, 2, -8);
     this.look = new THREE.Vector3(0, 1, 0);
     this.fov = 55;
@@ -20,6 +39,18 @@ export class PackCamera {
     this.trauma = 0; this.clock = 0;
     this._t = { pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 60 };
     this._look = new THREE.Vector3();
+    this.cut = [new THREE.Plane(new THREE.Vector3(-1, 0, 0), EDGE)];   // keep x <= EDGE
+    const skirt = new THREE.Mesh(
+      new THREE.PlaneGeometry(500, 40, 200, 4),
+      new THREE.MeshBasicMaterial({ map: soilTexture(), fog: false }),
+    );
+    skirt.rotation.y = Math.PI / 2;      // faces +X, toward the side camera
+    // half a metre inside the cut: the world's slight bend nudges it outward when seen from far away
+    skirt.position.set(EDGE - 0.5, -20, 0);
+    skirt.frustumCulled = false;
+    skirt.visible = false;
+    ctx.scene.add(skirt);
+    this.skirt = skirt;
   }
 
   toGrid() {
@@ -35,6 +66,10 @@ export class PackCamera {
     this._resetFollow = true;
   }
   shake(amount) { this.trauma = Math.min(1, this.trauma + amount); }
+  toggleView() {
+    this.view = this.view === 'side' ? 'chase' : 'side';
+    if (this.mode === 'follow') this.toFollow(0.8);
+  }
 
   _pack() {
     const rs = this.race.runners;
@@ -60,6 +95,7 @@ export class PackCamera {
   }
 
   _followPose(raw, out) {
+    if (this.view === 'side') return this._sidePose(raw, out);
     const p = this._pack();
     if (this._resetFollow) {
       this._resetFollow = false;
@@ -77,6 +113,41 @@ export class PackCamera {
     out.pos.set(clamp(this.fx, -3.6, 3.6), this.fy + 4.6 + s * 0.08 + up * 0.45 + nw * 1.2, this.rearZ + 7.5 + s * 0.15 + up * 1.1 + nw * 2.2);
     out.look.set(this.fx * 0.6, this.fy + 1.1 + up * 0.3, this.leadZ - 10);
     out.fov = 62 + Math.min(10, s * 0.35);
+  }
+
+  _sidePose(raw, out) {
+    const p = this._pack();
+    // bring the chaser into the shot once it closes on the last runner
+    const S = this.race.sweeper;
+    const rear = S.rig?.object.visible && S.z - p.rear < 16 ? Math.max(p.rear, S.z + 4) : p.rear;
+    if (this._resetFollow) {
+      this._resetFollow = false;
+      this.fy = p.y; this.cz = (p.lead + rear) / 2; this.spread = rear - p.lead;
+    }
+    this.fy = damp(this.fy, p.y, 3, raw);
+    this.cz = damp(this.cz, (p.lead + rear) / 2, 4, raw);
+    this.spread = damp(this.spread, clamp(rear - p.lead, 0, 45), 3, raw);
+    this.rise = damp(this.rise || 0, Math.max(0, p.top - p.bottom - 1.5), 3, raw);
+    const s = this.spread, up = this.rise;
+    // stand back far enough for the whole pack, raised like a stadium camera (about 15 degrees down)
+    const aspect = this.cam.aspect || 1.6;
+    const halfW = s / 2 + 4;
+    const dist = clamp(halfW / (Math.tan(0.5) * Math.max(0.8, aspect / 1.6)), 13, 46) + up * 0.6;
+    // aim above the runners, so the track sits in the lower third with the street rising behind it
+    out.pos.set(dist, this.fy + 1 + dist * 0.22 + up * 0.5, this.cz);
+    out.look.set(0, this.fy + 1.1 + dist * 0.1 + up * 0.45, this.cz);
+    const d = out.pos.distanceTo(out.look);
+    const hfov = 2 * Math.atan(halfW / d);
+    out.fov = clamp(2 * Math.atan(Math.tan(hfov / 2) / aspect) * DEG, 30, 70);
+  }
+
+  /** Cut away the near side for the side view; restore the full world otherwise. */
+  _cutaway(on) {
+    const r = this.ctx.renderer, env = this.ctx.env;
+    r.clippingPlanes = on ? this.cut : [];
+    this.skirt.visible = on;
+    if (on) this.skirt.position.z = this.pos.z;
+    if (env) { env._themeCurveY ??= env.curveY; env.curveY = on ? SIDE_CURVE : env._themeCurveY; }
   }
 
   /** How much narrower than a 16:10 screen this one is (0 on wide screens), so all three lanes stay in view. */
@@ -97,6 +168,9 @@ export class PackCamera {
       const k = 1 - Math.exp(-5 * raw);
       this.pos.lerp(T.pos, k); this.look.lerp(T.look, k); this.fov += (T.fov - this.fov) * k;
     } else { this.pos.copy(T.pos); this.look.copy(T.look); this.fov = T.fov; }
+
+    // cut away the near side from the moment the camera heads out to its side position
+    this._cutaway(this.mode === 'follow' && this.view === 'side');
 
     this.clock += raw;
     this.trauma = Math.max(0, this.trauma - raw * 1.6);

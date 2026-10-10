@@ -68,7 +68,9 @@ export class Runner {
     this.run = { t: 0, lastStumbleT: -99 };   // the autopilot reads these
     this.stats = { jumps: 0, rolls: 0, laneChanges: 0, stumbles: 0, crashes: 0, decisions: 0 };
     this.rig.object.position.set(this.b.x, this.b.y, this.b.z);
+    this.rig.object.rotation.set(0, 0, 0);
     this.rig.object.visible = true;
+    this.fly = null;
     this.controller?.reset?.();
     this._updateProps();
   }
@@ -191,10 +193,13 @@ export class Runner {
     this.rig.trigger?.('revive');
   }
 
+  /** Hit by the train: knocked flying off the track. */
   caught() {
     if (!this.alive) return;
     const b = this.b;
-    this.player.die(null);
+    const side = b.x > 0.1 ? 1 : b.x < -0.1 ? -1 : Math.random() < 0.5 ? -1 : 1;
+    this.fly = { t: 0, vx: side * (5 + Math.random() * 2), vy: 11 + Math.random() * 3, vz: -6, spin: side * (7 + Math.random() * 4) };
+    this.player.flight = null;
     this.ctx.events.emit(EV.CAUGHT, { x: b.x, y: b.y, z: b.z, runner: this.index });
     this.rig.trigger?.('caught');
     this._out('caught');
@@ -280,7 +285,7 @@ export class Runner {
     const P = this.player, b = P.b;
     const out = this.status === 'down' || this.status === 'caught';
     const adt = out || mode === 'menu' ? raw : dt;
-    if (this.status === 'caught') P.deathUpdate(raw);
+    if (this.fly) { this._flyOff(raw); return; }
     this._updateProps();
     this.rig.object.position.set(b.x, b.y, b.z);
     this.lean = damp(this.lean, clamp(b.vx / 28, -1, 1), 16, adt);
@@ -297,6 +302,20 @@ export class Runner {
     s.magnet = this.timers.magnet > 0;
     s.blink = P.blinkT > 0 && !out;
     this.rig.update(adt, s);
+  }
+
+  _flyOff(raw) {
+    const f = this.fly, b = this.b, o = this.rig.object;
+    if (!o.visible) return;
+    f.t += raw;
+    b.x += f.vx * raw; b.y = Math.max(0, b.y + f.vy * raw); b.z += f.vz * raw;
+    f.vy -= 30 * raw;
+    o.position.set(b.x, b.y, b.z);
+    o.rotation.z += f.spin * raw;
+    o.rotation.x += f.spin * 0.4 * raw;
+    this._rs.mode = 'dead';
+    this.rig.update(raw, this._rs);
+    if (f.t > 1.4) o.visible = false;
   }
 
   dispose() {

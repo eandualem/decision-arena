@@ -216,12 +216,34 @@ export class Race {
     S.z -= S.speed * dt;
     const gap = Math.max(RACE.minGap, RACE.startGap - this.t * RACE.closeRate);
     if (lead && S.z > lead.b.z + gap) { S.speed += (S.z - (lead.b.z + gap)) / dt; S.z = lead.b.z + gap; }
+    this._smash(S);
     for (const r of this.runners) {
       if (r.alive && r.b.z >= S.z - RACE.reach) {
         r.caught();
         S.rig.trigger('catch');
         this.camera.shake(0.35);
       }
+    }
+  }
+
+  /** The train smashes through obstacles it reaches, so it never passes through them. Only ones with no runner
+   *  still in the race alongside or on top of them: those are behind everyone. */
+  _smash(S) {
+    const lvl = this.ctx.level, lo = S.z - RACE.reach, hi = S.z + 14;
+    let smashed = null;
+    for (let i = lvl.recs.length - 1; i >= 0; i--) {
+      const rec = lvl.recs[i], c = rec.col;
+      if (!(c.minZ < hi && c.maxZ > lo)) continue;
+      if (this.runners.some((u) => u.alive && u.b.z > c.minZ - 1 && u.b.z < c.maxZ + 1)) continue;
+      smashed = c.maxZ;
+      const link = rec.link;
+      lvl._release(i);
+      if (link) lvl._removeRec(link);
+      i = Math.min(i, lvl.recs.length);
+    }
+    if (smashed !== null) {
+      this.ctx.fx?.burst?.('crash', { x: 0, y: 1.2, z: Math.max(lo, Math.min(smashed, S.z)) });
+      this.camera.shake(0.18);
     }
   }
 

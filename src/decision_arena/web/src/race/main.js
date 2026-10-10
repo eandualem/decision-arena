@@ -90,7 +90,10 @@ const runners = Math.max(2, Math.min(6, +params.get('runners') || 4));
 race.setup(botSeats(runners));
 hud.build();
 hud._onState(race.state);
-addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); start(); } });
+addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); start(); }
+  if (e.code === 'KeyC') race.camera.toggleView();
+});
 document.addEventListener('visibilitychange', () => ctx.audio.setSuspended?.(document.hidden));
 
 // ---------------------------------------------------------------- frame loop
