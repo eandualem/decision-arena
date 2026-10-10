@@ -55,6 +55,7 @@ export class Runner {
     this.status = 'ready';       // ready | running | down | caught | won
     this.downT = 0;
     this.crashes = 0;
+    this.bumpT = -9;
     this.speed = 0;
     this.streak = 0;
     this.dip = 0;

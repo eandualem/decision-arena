@@ -91,6 +91,7 @@ export class Race {
     const rear = Math.max(...this.runners.map((r) => r.b.z));
     this.sweeper.z = rear + RACE.startGap - 6;
     this.camera.toGrid();
+    this._refreshInfo();   // before the next level.update, which would otherwise stream around the last race
     this._set('menu');
   }
 
