@@ -126,7 +126,8 @@ export class PackCamera {
       else if (this.shot === 'danger' || this.shot === 'winner' || this.shotT > ROTATION[this.step][1]) {
         if (this.shot !== 'danger' && this.shot !== 'winner') this.step = (this.step + 1) % ROTATION.length;
         want = ROTATION[this.step][0];
-        if (want === 'pack' && this.spread > 22) want = 'lead';   // a far pack shot shows nothing well
+        const p = this._pack();
+        if (want === 'pack' && p.rear - p.lead > 22) want = 'lead';   // a far pack shot shows nothing well
         if (want === this.shot) { this.shotT = 0; return false; }
       }
     }
@@ -141,6 +142,7 @@ export class PackCamera {
     const alive = this._alive();
     const a = alive[0], b = alive[1] && Math.abs(alive[1].b.z - a.b.z) < 8 ? alive[1] : a;
     const fx = (a.b.x + b.b.x) / 2, fy = Math.min(a.b.y, b.b.y), fz = (a.b.z + b.b.z) / 2;
+    const rise = Math.abs(a.b.y - b.b.y);   // one leader high above the other (a jetpack, a pogo bounce)
     if (changed || this._reset) {
       if (!this._reset) this._blend(this.shot === 'danger' ? 0.5 : 0.8);
       this.f.set(fx, fy, fz);
@@ -149,6 +151,7 @@ export class PackCamera {
     }
     // the leaders (the first two, if close), smoothed so the camera never jitters with their steps
     this.f.set(damp(this.f.x, fx, 3, raw), damp(this.f.y, fy, 4, raw), damp(this.f.z, fz, 10, raw));
+    this.lift = damp(this.lift || 0, rise, 4, raw);
     const F = this.f;
     switch (this.shot) {
       case 'pack': this._packPose(raw, out); break;
@@ -184,6 +187,15 @@ export class PackCamera {
         out.look.set(-0.6, F.y + 1.1, F.z - 9);
         out.fov = 60;
     }
+    if (this.shot !== 'pack') {
+      // both leaders in frame when one is high above the other: aim between them and step back
+      const up = this.shot === 'danger' || this.shot === 'winner' ? 0 : this.lift;
+      out.look.y += up * 0.5;
+      out.pos.y += up * 0.7;
+      // on a narrow screen, step back along the view as well as widening it, so the outer lanes fit
+      const k = 1 + up * 0.12 + this._narrow() * 0.4;
+      out.pos.sub(out.look).multiplyScalar(k).add(out.look);
+    }
     out.pos.x = clamp(out.pos.x, -SIDE, SIDE);
     out.pos.y = Math.min(out.pos.y, CEILING);
   }
@@ -198,7 +210,7 @@ export class PackCamera {
     else this._directorPose(raw, T);
     this._reset = false;
     // a little wider on a narrow screen, so all three lanes fit
-    if (this.mode !== 'grid') T.fov = Math.min(80, T.fov + this._narrow() * 14);
+    if (this.mode !== 'grid') T.fov = Math.min(80, T.fov + this._narrow() * 6);
     if (this.blendT < this.blendDur) {
       this.blendT += raw;
       const w = easeInOut(clamp(this.blendT / this.blendDur));
