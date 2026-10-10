@@ -47,6 +47,8 @@ export class Race {
   }
 
   start() {
+    // keys, mystery boxes and the like belong to single-player progression and do nothing in a race
+    this.ctx.level.skipPickups = new Set(['key', 'mysteryBox', 'letter', 'token', 'hoverboardItem']);
     this.sweeper.rig = this.ctx.characters.createChaser();
     this.ctx.scene.add(this.sweeper.rig.object);
   }
@@ -190,10 +192,12 @@ export class Race {
     this.camera.shake(0.12);
   }
 
-  /** The other runners as moving obstacles, for a bot planning around them. */
+  /** The other runners as moving obstacles, for a bot planning around them: the ones it could touch,
+   *  by the same rules as `_contacts()`. */
   runnerColliders(self, out) {
+    if (self.player.invulnT > 0) return;
     for (const r of this.runners) {
-      if (r === self || !r.alive || r.player.flight) continue;   // a runner that is down is in the way too
+      if (r === self || !r.active || r.player.flight || r.player.invulnT > 0) continue;
       const b = r.b;
       const c = r._col || (r._col = { id: 1e6 + r.index, kind: 'runner', lane: 0, minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0, vz: 0, top: 'none', ramp: null, moving: true });
       c.lane = b.lane; c.minX = b.x - HW; c.maxX = b.x + HW;

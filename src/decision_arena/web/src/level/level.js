@@ -139,7 +139,7 @@ export class Level {
     }
     for (const m of ch.movings) this.pending.push(m);
     for (const c of ch.coins) this.coins.add(c.x, c.y, -c.d, false);
-    for (const p of ch.pickups) this.pickups.add(p.type, p.x, p.y, -p.d, p.letter);
+    for (const p of ch.pickups) if (!this.skipPickups?.has(p.type)) this.pickups.add(p.type, p.x, p.y, -p.d, p.letter);
   }
 
   _spawnBackdrop() {
