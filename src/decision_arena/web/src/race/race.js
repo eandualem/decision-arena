@@ -234,7 +234,9 @@ export class Race {
     for (let i = lvl.recs.length - 1; i >= 0; i--) {
       const rec = lvl.recs[i], c = rec.col;
       if (!(c.minZ < hi && c.maxZ > lo)) continue;
-      const link = rec.link;   // a ramp and its train go together: both must be clear
+      // a ramp and its train go together: both must be clear. Records are recycled, so trust a link only while
+      // it points back and is still in play
+      const link = rec.link && rec.link.link === rec && lvl.recs.includes(rec.link) ? rec.link : null;
       const near = (col) => this.runners.some((u) => u.alive && u.b.z > col.minZ - 1 && u.b.z < col.maxZ + 1);
       if (near(c) || (link && near(link.col))) continue;
       smashed = c.maxZ;
