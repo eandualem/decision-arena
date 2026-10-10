@@ -4,7 +4,7 @@
 import { EV } from '../core/events.js';
 import { SPEED, PHYS, PLAYER } from '../config.js';
 import { HW, HD } from '../gameplay/physics.js';
-import { collapseUniform } from '../core/curve.js';
+import { Collapse } from './collapse.js';
 import { Runner } from './runner.js';
 import { PackCamera } from './camera.js';
 
@@ -43,11 +43,13 @@ export class Race {
     this.winner = null;
     this.countdown = { n: 0, t: 0 };
     this.collapse = { z: 30, speed: 0, dustT: 0 };
+    this.ground = new Collapse(ctx);
     this.camera = new PackCamera(ctx, this);
     this._cols = [];
   }
 
   start() {
+    this.ground.start();
     // keys, mystery boxes and the like belong to single-player progression and do nothing in a race
     this.ctx.level.skipPickups = new Set(['key', 'mysteryBox', 'letter', 'token', 'hoverboardItem']);
   }
@@ -94,6 +96,7 @@ export class Race {
     this.winner = null;
     const rear = Math.max(...this.runners.map((r) => r.b.z));
     this.collapse.z = rear + RACE.startGap - 6;
+    this.ground.reset();
     this.camera.toGrid();
     this._refreshInfo();   // before the next level.update, which would otherwise stream around the last race
     this._set('menu');
@@ -112,14 +115,11 @@ export class Race {
   update(dt, raw) {
     if (this.state === 'intro') this._updateCountdown(raw);
     else if (this.state === 'running') this._updateRace(dt);
-    else if (this.state === 'gameover') this._crumbleToWinner(dt);
+
     const mode = this.state === 'running' ? 'run' : 'menu';
     for (const r of this.runners) r.updateRig(dt, raw, r.alive ? mode : 'menu');
-    // the ground falls away behind the edge once the race is on, and stays down until the next grid
-    const on = this.state === 'running' || this.state === 'gameover';
-    // once the edge has stopped behind the winner, what is falling keeps falling on the clock alone
-    const after = this.state === 'gameover' && this.stopT != null ? this.t - this.stopT : 0;
-    collapseUniform.value.set(this.collapse.z, on ? 1 : 0, after, 0);
+    // the edge advances while the race is on and stops at the finish; what already broke away keeps falling
+    this.ground.update(this.state === 'gameover' ? raw : dt, this.collapse.z, this.state === 'running');
     this.camera.update(raw);
     this._refreshInfo();
   }
@@ -211,16 +211,6 @@ export class Race {
     }
   }
 
-  /** After the finish the ground keeps crumbling, up to just behind the winner. */
-  _crumbleToWinner(dt) {
-    const C = this.collapse, w = this.winner;
-    if (dt > 0) this.t += dt;   // the race clock runs on, so what is falling keeps falling
-    if (dt <= 0 || this.stopT != null) return;
-    const stop = w ? w.b.z + 3 : C.z;
-    C.z = Math.min(C.z, Math.max(stop, C.z - Math.max(C.speed, 10) * dt));   // never back
-    if (C.z <= stop + 1e-6) this.stopT = this.t;
-  }
-
   // ------------------------------------------------------------------ the collapsing ground
   /** The edge advances behind the pack; everything behind it, track, trains and runners, falls away. */
   _updateCollapse(dt) {
@@ -265,7 +255,6 @@ export class Race {
 
   _finish(winner) {
     this.winner = winner || null;
-    this.stopT = null;
     if (winner && winner.alive) {
       winner.status = 'won';
       winner.rig.trigger?.('celebrate');

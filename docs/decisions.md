@@ -39,17 +39,19 @@ watch and practical for only two to four players.
 - **Crashes.** A crash knocks a runner down for 0.7 s. It then gets up and
   runs through obstacles for 2 s while it gets going again. A crash costs
   ground rather than ending the race.
-- **The collapse.** The ground falls away behind the pack: everything
-  behind the edge, track, trains, buildings and runners, breaks up and drops
-  into the dark. The edge is at most 30 m behind the leader at the start,
-  closing to 6 m. A runner it reaches falls and is out, so a crash early in
-  the race can be survived and a crash late in it cannot. The last runner
-  left wins.
-- **The camera.** It looks forward along the track from 45 degrees behind
-  and to the right, so you see the runners and what is coming at them, and
-  steps back just enough to fit every runner and the edge when it is close.
-  The near side of the scenery is cut away at the edge of the track, so the
-  track runs along a cliff. **C** switches to a view from behind.
+- **The collapse.** The ground falls away behind the pack. The world is cut
+  cleanly at the edge, and the edge sheds real debris as it advances:
+  chunks of ballast, sleepers and rails, and pieces of every train or
+  barrier it passes, tumbling into a dark pit. The edge is at most 30 m
+  behind the leader at the start, closing to 6 m. A runner it reaches
+  tumbles down with the debris and is out, so a crash early in the race can
+  be survived and a crash late in it cannot. The last runner left wins.
+- **The camera.** A director cuts between close shots, like a sports
+  broadcast: behind the leaders, the whole pack, a low fast angle and a look
+  back at the leaders' faces. It cuts to a danger shot when the ground is
+  about to take someone, and to the winner at the finish. Every shot stays
+  over the track, so the buildings on both sides stay whole. **C** switches
+  to a fixed view of the whole pack from behind.
 
 **Why.** Every rule creates contact between runners: overtakes, blocks,
 comebacks and a pressure that rises over the race.
@@ -57,9 +59,10 @@ comebacks and a pressure that rises over the race.
 **Rejected.** Ending a runner's race on its first crash, as Rail Dash does.
 In simulated races most runners went out within seconds, and the sweeper
 never mattered. A chaser on the track (a sweeping machine, then a runaway
-train): it had to pass through the trains on the track. A camera straight
-behind the pack, or straight from the side: one hid who was falling behind,
-the other hid the obstacles ahead.
+train): it had to pass through the trains on the track. Moving the ground's
+vertices down: connected surfaces folded instead of breaking. One wide shot
+fitting every runner (from behind, from the side, from 45 degrees): from far
+away it hid either the obstacles ahead or showed the world's cut-away edge.
 
 ## 3. How a model decides: no ticks
 

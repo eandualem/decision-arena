@@ -1,7 +1,7 @@
 // Decision Arena bootstrap: Rail Dash's renderer, world, level, characters, effects and audio, with the race
 // in place of the single-player game. Adapted from Rail Dash's src/main.js (no shop, menus or touch input).
 import * as THREE from 'three';
-import { installCurvedWorld, curveUniform, camWorldUniform } from '../core/curve.js';
+import { installCurvedWorld, curveUniform } from '../core/curve.js';
 import { EventBus, EV } from '../core/events.js';
 import { RNG } from '../core/rng.js';
 import { setMaxAnisotropy } from '../core/tex.js';
@@ -56,7 +56,6 @@ container.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.1, CONFIG.VIEW.cameraFar);
 scene.add(camera);
-camWorldUniform.value = camera.matrixWorld;   // the collapse shader turns view space back into world space
 
 const ctx = {
   renderer, scene, camera, container, events: new EventBus(), config: CONFIG, curve: curveUniform,
@@ -111,7 +110,6 @@ renderer.setAnimationLoop((now) => {
   ctx.level.update(dt, info);
   race.update(dt, raw);
   ctx.env.update(dt, info);
-  race.camera.flatten();
   ctx.fx.update(dt, race.focusInfo());
   ctx.audio.update(raw, race.focusInfo());
   hud.update();
