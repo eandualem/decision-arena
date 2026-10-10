@@ -197,7 +197,8 @@ export class Runner {
   caught() {
     if (!this.alive) return;
     const b = this.b;
-    const side = b.x > 0.1 ? 1 : b.x < -0.1 ? -1 : Math.random() < 0.5 ? -1 : 1;
+    // away from the side camera, toward the far side of the track, so the knock-out stays in view
+    const side = -1;
     this.fly = { t: 0, vx: side * (5 + Math.random() * 2), vy: 11 + Math.random() * 3, vz: -6, spin: side * (7 + Math.random() * 4) };
     this.player.flight = null;
     this.player.blinkT = 0; this.player.invulnT = 0;   // a crash's blinking ends: the fly-off must be seen

@@ -111,6 +111,9 @@ export class PackCamera {
     this.rise = damp(this.rise || 0, Math.max(0, p.top - p.bottom - 1.5), 3, raw);
     const s = this.spread, up = this.rise, nw = this._narrow();
     out.pos.set(clamp(this.fx, -3.6, 3.6), this.fy + 4.6 + s * 0.08 + up * 0.45 + nw * 1.2, this.rearZ + 7.5 + s * 0.15 + up * 1.1 + nw * 2.2);
+    // stay in front of the train when it closes in, never inside it
+    const S = this.race.sweeper;
+    if (S.rig?.object.visible) out.pos.z = Math.min(out.pos.z, S.z - 2.5);
     out.look.set(this.fx * 0.6, this.fy + 1.1 + up * 0.3, this.leadZ - 10);
     out.fov = 62 + Math.min(10, s * 0.35);
   }
@@ -124,23 +127,29 @@ export class PackCamera {
       this._resetFollow = false;
       this.fy = p.y; this.cz = (p.lead + rear) / 2; this.spread = rear - p.lead;
     }
-    this.fy = damp(this.fy, p.y, 3, raw);
     this.cz = damp(this.cz, (p.lead + rear) / 2, 4, raw);
     this.spread = damp(this.spread, clamp(rear - p.lead, 0, 45), 3, raw);
-    this.rise = damp(this.rise || 0, Math.max(0, p.top - p.bottom - 1.5), 3, raw);
-    const s = this.spread, up = this.rise;
+    const s = this.spread;
     // stand back far enough for the whole pack, measured from where the camera actually is (it trails a fast
     // pack a little), raised like a stadium camera; on a narrow screen the width decides, so step further back
     const aspect = this.cam.aspect || 1.6;
     const halfW = Math.max(s / 2, Math.abs(p.lead - this.cz), Math.abs(rear - this.cz)) + 4;
     const half = Math.min(0.5, Math.atan(Math.tan(32 * Math.PI / 180) * aspect));   // widest half-angle at a 64 degree cap
-    const dist = Math.max(13, halfW / Math.tan(half)) + up * 0.6;
-    // aim above the runners, so the track sits in the lower third with the street rising behind it
-    out.pos.set(dist, this.fy + 1 + dist * 0.22 + up * 0.5, this.cz);
-    out.look.set(0, this.fy + 1.1 + dist * 0.1 + up * 0.45, this.cz);
+    // and high enough for the lowest feet and the highest head (a jetpack, a pogo bounce)
+    this.bot = damp(this.bot ?? p.bottom, p.bottom, 3, raw);
+    this.top = damp(this.top ?? p.top, p.top, 3, raw);
+    const halfV = (this.top + 2 - this.bot) / 2 + 1.5;
+    const dist = Math.max(13, halfW / Math.tan(half), halfV / Math.tan(25 * Math.PI / 180));
+    const mid = (this.bot + this.top + 2) / 2;
+    // aim a little above the runners, so the track sits low with the street rising behind it
+    const aim = Math.min(dist * 0.08, 2.5);
+    out.pos.set(dist, mid + dist * 0.2, this.cz);
+    out.look.set(0, mid + aim, this.cz);
+    // the wider of what the pack's length and its height need
     const d = out.pos.distanceTo(out.look);
-    const hfov = 2 * Math.atan(halfW / d);
-    out.fov = clamp(2 * Math.atan(Math.tan(hfov / 2) / aspect) * DEG, 30, 70);
+    const forWidth = 2 * Math.atan(Math.tan(Math.atan(halfW / d)) / aspect);
+    const forHeight = 2 * Math.atan((halfV + aim) / d);
+    out.fov = clamp(Math.max(forWidth, forHeight) * DEG, 30, 70);
   }
 
   /** Cut away the near side for the side view; restore the full world otherwise. */
