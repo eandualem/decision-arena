@@ -178,12 +178,12 @@ function panel(m) {
 }
 
 function crash(i) {
+  // Kept in grid cells, so the effect stays on the board through a resize.
   const c = cur.cycles[i], [x, y] = c.trail[c.trail.length - 1];
-  const [px, py] = center(x, y);
-  rings.push({ x: px, y: py, t: performance.now(), color: COLORS[i] });
+  rings.push({ x, y, t: performance.now(), color: COLORS[i] });
   for (let k = 0; k < 28; k++) {
-    const a = Math.random() * Math.PI * 2, v = (0.6 + Math.random() * 1.8) * cell / 16;
-    sparks.push({ x: px, y: py, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: performance.now(), color: COLORS[i] });
+    const a = Math.random() * Math.PI * 2, v = (0.6 + Math.random() * 1.8) / 16;
+    sparks.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: performance.now(), color: COLORS[i] });
   }
   flash = 1;
 }
@@ -221,16 +221,16 @@ function draw(now) {
   // Crash: an expanding ring, sparks and a short flash
   rings = rings.filter((g) => now - g.t < 700);
   for (const g of rings) {
-    const k = (now - g.t) / 700;
+    const k = (now - g.t) / 700, [gx, gy] = center(g.x, g.y);
     ctx.save(); ctx.globalAlpha = 1 - k; ctx.strokeStyle = "#fff"; ctx.shadowColor = g.color; ctx.shadowBlur = 20;
-    ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(g.x, g.y, cell * (0.5 + k * 4), 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(gx, gy, cell * (0.5 + k * 4), 0, Math.PI * 2); ctx.stroke(); ctx.restore();
   }
   sparks = sparks.filter((s) => now - s.t < 650);
   for (const s of sparks) {
-    const k = (now - s.t) / 650, d = (now - s.t) / 16;
+    const k = (now - s.t) / 650, d = (now - s.t) / 16, [sx, sy] = center(s.x, s.y);
     ctx.save(); ctx.globalAlpha = 1 - k; ctx.fillStyle = k < 0.2 ? "#fff" : s.color; ctx.shadowColor = s.color; ctx.shadowBlur = 8;
     const z = Math.max(3, cell * 0.14);
-    ctx.fillRect(s.x + s.vx * d - z / 2, s.y + s.vy * d - z / 2, z, z); ctx.restore();
+    ctx.fillRect(sx + s.vx * d * cell - z / 2, sy + s.vy * d * cell - z / 2, z, z); ctx.restore();
   }
   if (flash > 0.01) { ctx.fillStyle = `rgba(255,255,255,${flash * 0.12})`; ctx.fillRect(0, 0, r.width, r.height); flash *= 0.85; }
   requestAnimationFrame(draw);
