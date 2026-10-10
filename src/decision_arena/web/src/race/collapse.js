@@ -39,7 +39,7 @@ export class Collapse {
     this.plane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 1e6);   // keeps z <= constant
     this.on = false;
     this.z = 1e6;
-    this.lastZ = null;
+    this.cursor = null;      // where the next row of debris breaks off
     this._passed = new Set();
 
     // debris: one instanced mesh of boxes, each with its own size, colour, spin and fall
@@ -81,7 +81,7 @@ export class Collapse {
   reset() {
     this.on = false;
     this.z = 1e6;
-    this.lastZ = null;
+    this.cursor = null;
     this.plane.constant = 1e6;
     this.pieces.length = 0;
     this.mesh.count = 0;
@@ -92,10 +92,9 @@ export class Collapse {
   /** Move the edge to z (it only ever advances) and let the debris fall. */
   update(dt, z, active) {
     if (active) {
-      if (!this.on) { this.on = true; this.lastZ = z; }
+      if (!this.on) { this.on = true; this.cursor = z; }
       if (z < this.z) this.z = z;
-      if (this.lastZ !== null && this.z < this.lastZ) this._shed(this.z, this.lastZ);
-      this.lastZ = this.z;
+      if (this.cursor !== null && this.z < this.cursor) this._shed(this.z);
       this.plane.constant = this.z;
       this.face.position.set(0, -PIT / 2, this.z);
       this.pit.position.set(0, -PIT, this.z + 250);
@@ -105,22 +104,25 @@ export class Collapse {
   }
 
   /** The ground from zNew to zOld (behind it) breaks away: track debris, and pieces of whatever stood there. */
-  _shed(zNew, zOld) {
-    for (let z = zOld; z > zNew; z -= 0.45) {
+  _shed(zNew) {
+    // a row every 0.45 m of ground, wherever the frames fall, so the amount is the same at any frame rate
+    const recs = this.ctx.level.recs;
+    for (; this.cursor > zNew; this.cursor -= 0.45) {
+      const z = this.cursor;
       for (let k = 0; k < 4; k++) this._spawn((Math.random() - 0.5) * 9.4, 0.15, z, 0.25 + Math.random() * 0.5, BALLAST);
       if (Math.random() < 0.5) for (const lane of [-1, 0, 1]) this._spawn(lane * 2.6 + (Math.random() - 0.5), 0.2, z, 0, SLEEPER, [2.2, 0.16, 0.26]);
       if (Math.random() < 0.35) for (const lane of [-1, 0, 1]) for (const s of [-0.62, 0.62]) this._spawn(lane * 2.6 + s, 0.25, z, 0, RAIL, [0.09, 0.14, 0.9 + Math.random()]);
-    }
-    for (const rec of this.ctx.level.recs) {
-      const c = rec.col;
-      if (c.maxZ < zNew || c.minZ > zOld || this._passed.has(rec.id)) continue;
-      if (c.minZ >= zNew) this._passed.add(rec.id);   // fully gone now
-      const train = rec.kind === 'train' || rec.kind === 'ramp';
-      const lo = Math.max(c.minZ, zNew), hi = Math.min(c.maxZ, zOld);
-      const n = Math.ceil((hi - lo) * (train ? 3.5 : 6)) + (train ? 0 : 4);
-      for (let i = 0; i < n; i++) {
-        const x = c.minX + Math.random() * (c.maxX - c.minX), y = c.minY + Math.random() * (c.maxY - c.minY);
-        this._spawn(x, y, lo + Math.random() * (hi - lo), train ? 0.5 + Math.random() * 0.8 : 0.2 + Math.random() * 0.35, train ? TRAIN : BARRIER);
+      // whatever stood on this row breaks up too: trains a few chunks per row, a barrier in one burst
+      for (const rec of recs) {
+        const c = rec.col;
+        if (c.maxZ < z - 0.45 || c.minZ > z) continue;
+        const train = rec.kind === 'train' || rec.kind === 'ramp';
+        if (!train && this._passed.has(rec.id)) continue;
+        if (!train) this._passed.add(rec.id);
+        for (let i = 0, n = train ? 2 : 7; i < n; i++) {
+          const x = c.minX + Math.random() * (c.maxX - c.minX), y = c.minY + Math.random() * (c.maxY - c.minY);
+          this._spawn(x, y, z, train ? 0.5 + Math.random() * 0.8 : 0.2 + Math.random() * 0.35, train ? TRAIN : BARRIER);
+        }
       }
     }
   }

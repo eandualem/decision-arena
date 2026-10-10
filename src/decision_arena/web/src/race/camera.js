@@ -145,14 +145,15 @@ export class PackCamera {
       if (!this._reset) this._blend(this.shot === 'danger' ? 0.5 : 0.8);
       this.f.set(fx, fy, fz);
       if (this.danger) this.d.copy(this.danger.b);
+      if (this.shot === 'pack') this._reset = true;   // its smoothing starts from where the pack is now
     }
     // the leaders (the first two, if close), smoothed so the camera never jitters with their steps
     this.f.set(damp(this.f.x, fx, 3, raw), damp(this.f.y, fy, 4, raw), damp(this.f.z, fz, 10, raw));
     const F = this.f;
     switch (this.shot) {
       case 'pack': this._packPose(raw, out); break;
-      case 'low':     // low and fast, from behind on the left
-        out.pos.set(-3.8, F.y + 1.7, F.z + 5);
+      case 'low':     // low and fast, from behind on the left, just outside the left lane's trains
+        out.pos.set(-4.15, F.y + 1.7, F.z + 5);
         out.look.set(0.4, F.y + 1.2, F.z - 10);
         out.fov = 64;
         break;
@@ -165,7 +166,7 @@ export class PackCamera {
         const r = this.danger;
         if (r) this.d.set(damp(this.d.x, r.b.x, 4, raw), damp(this.d.y, r.alive ? r.b.y : this.d.y, 4, raw), damp(this.d.z, r.b.z, 10, raw));
         const D = this.d;
-        out.pos.set(3.3, D.y + 2.8, D.z - 7.5);
+        out.pos.set(3.3, D.y + 4.2, D.z - 7.5);   // above any train roof
         out.look.set(-0.3, D.y + 0.8, D.z + 3);
         out.fov = 58;
         break;
