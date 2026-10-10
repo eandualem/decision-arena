@@ -240,7 +240,7 @@ export class Race {
       if (Math.random() < 0.2) this.ctx.fx?.burst?.('crash', { x: (Math.random() - 0.5) * 8, y: 0.3, z: C.z + 1 });
     }
     const rear = Math.max(...this.runners.filter((r) => r.alive).map((r) => r.b.z), -Infinity);
-    if (C.z - rear < 10) this.camera.shake(0.02);
+    if (C.z - rear < 10) this.camera.rumble(0.3);
   }
 
   // ------------------------------------------------------------------ places and the finish

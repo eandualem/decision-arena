@@ -73,6 +73,8 @@ export class PackCamera {
     this._resetFollow = true;
   }
   shake(amount) { this.trauma = Math.min(1, this.trauma + amount); }
+  /** Keep at least this much shake: a steady rumble, the same at any frame rate. */
+  rumble(level) { this.trauma = Math.max(this.trauma, level); }
   toggleView() {
     this.view = this.view === 'angle' ? 'chase' : 'angle';
     if (this.mode === 'follow') this.toFollow(0.8);

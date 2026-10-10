@@ -311,8 +311,9 @@ export class Runner {
     const f = this.fall, o = this.rig.object;
     if (f.t > 3) { o.visible = false; return; }   // long gone below
     f.t += raw;
-    this.b.y = f.y0 - 9 * f.t * f.t;   // falls on its own clock too, also once the race is over
-    o.position.set(this.b.x, this.b.y, this.b.z);
+    // falls on its own clock too, also once the race is over; only the figure drops, so the runner's position
+    // (which the camera may still frame) stays on the track
+    o.position.set(this.b.x, f.y0 - 9 * f.t * f.t, this.b.z);
     this._rs.mode = 'dead';
     this.rig.update(raw, this._rs);
   }
