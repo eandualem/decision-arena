@@ -86,8 +86,9 @@ async def play(game: Game, players: list[Seat], settings: Settings, emit: Emit, 
             tasks.values(), timeout=settings.tick if settings.clock else None
         )
         for task in pending:
+            # Cancelled, not awaited: a model's cleanup never holds up the tick.
+            task.add_done_callback(_discard)
             task.cancel()
-        await asyncio.gather(*pending, return_exceptions=True)
         moves, decisions = ["straight"] * len(players), [None] * len(players)
         for i, task in tasks.items():
             seat = players[i]
@@ -110,11 +111,17 @@ async def play(game: Game, players: list[Seat], settings: Settings, emit: Emit, 
                 "latencyMs": round(latency * 1000),
                 "missed": False,
             }
+        # Moves land on the tick boundary, however early the answers came.
+        await asyncio.sleep(max(0.0, started + settings.tick - loop.time()))
         crashed = game.step(moves)
         if game.over and game.winner is not None:
             players[game.winner].wins += 1
         await emit(_frame(game, players, settings, number, decisions, crashed))
-        await asyncio.sleep(max(0.0, started + settings.tick - loop.time()))
+
+
+def _discard(task: asyncio.Task[Any]) -> None:
+    if not task.cancelled():
+        task.exception()  # retrieved, so a late failure is not reported as unhandled
 
 
 async def series(models: list[Model], settings: Settings, emit: Emit) -> list[Seat]:

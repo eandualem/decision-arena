@@ -37,7 +37,7 @@
   .bar { display: grid; grid-template-columns: 58px 1fr 38px; align-items: center; gap: 8px; font-size: 12px;
     color: var(--dim); margin: 3px 0; }
   .bar .track { height: 6px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; }
-  .bar .fill { height: 100%; width: 0; border-radius: 3px; transition: width .12s ease-out; opacity: .45; }
+  .bar .fill { display: block; height: 100%; width: 0; border-radius: 3px; transition: width .12s ease-out; opacity: .45; }
   .bar.chosen { color: var(--ink); }
   .bar.chosen .fill { opacity: 1; }
   .bar .pct { text-align: right; }
@@ -108,7 +108,7 @@ function receive(m) {
     say("Decision Arena", names.join("  vs  "), "#e6edf7");
     $("start").hidden = false;
   } else if (m.type === "frame") {
-    if (m.tick === 0) { prev = null; hide(); }
+    if (m.tick === 0 || !running) { hide(); running = true; $("start").hidden = true; }
     prev = cur && cur.game === m.game ? cur : null;
     cur = m; arrived = performance.now();
     for (const i of m.crashed) crash(i);

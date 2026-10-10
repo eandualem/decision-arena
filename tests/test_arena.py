@@ -74,3 +74,36 @@ def test_series_stops_once_the_leader_cannot_be_caught():
     players = asyncio.run(series([Greedy(1), Broken()], settings, emit))
     # Broken always keeps straight into the wall; Greedy turns away and wins twice.
     assert [p.wins for p in players] == [2, 0]
+
+
+class SlowToCancel:
+    name = "SlowToCancel"
+
+    async def decide(self, question):
+        try:
+            await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.3)  # cleanup after being cancelled
+            raise
+
+
+def test_frames_land_on_tick_boundaries_whatever_the_models_do():
+    times = []
+
+    async def go():
+        loop = asyncio.get_running_loop()
+
+        async def emit(frame):
+            times.append(loop.time())
+
+        players = seats([Greedy(0), SlowToCancel()])
+        game = Game(24, 18, 2)
+        try:
+            await asyncio.wait_for(play(game, players, Settings(tick=0.05), emit, 0), 0.4)
+        except TimeoutError:
+            pass
+
+    asyncio.run(go())
+    gaps = [b - a for a, b in zip(times[1:], times[2:])]  # after the opening frame
+    assert len(gaps) >= 4
+    assert all(0.04 < gap < 0.08 for gap in gaps)
