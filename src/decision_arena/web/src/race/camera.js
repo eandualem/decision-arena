@@ -111,9 +111,6 @@ export class PackCamera {
     this.rise = damp(this.rise || 0, Math.max(0, p.top - p.bottom - 1.5), 3, raw);
     const s = this.spread, up = this.rise, nw = this._narrow();
     out.pos.set(clamp(this.fx, -3.6, 3.6), this.fy + 4.6 + s * 0.08 + up * 0.45 + nw * 1.2, this.rearZ + 7.5 + s * 0.15 + up * 1.1 + nw * 2.2);
-    // stay in front of the train when it closes in, never inside it
-    const S = this.race.sweeper;
-    if (S.rig?.object.visible) out.pos.z = Math.min(out.pos.z, S.z - 2.5);
     out.look.set(this.fx * 0.6, this.fy + 1.1 + up * 0.3, this.leadZ - 10);
     out.fov = 62 + Math.min(10, s * 0.35);
   }
@@ -122,7 +119,7 @@ export class PackCamera {
     const p = this._pack();
     // bring the chaser into the shot once it closes on the last runner
     const S = this.race.sweeper;
-    const rear = S.rig?.object.visible && S.z - p.rear < 16 ? Math.max(p.rear, S.z + 4) : p.rear;
+    const rear = S.z < 4 && S.z - p.rear < 16 ? Math.max(p.rear, S.z + 4) : p.rear;
     if (this._resetFollow) {
       this._resetFollow = false;
       this.fy = p.y; this.cz = (p.lead + rear) / 2; this.spread = rear - p.lead;
@@ -182,6 +179,8 @@ export class PackCamera {
 
     // cut away the near side from the moment the camera heads out to its side position
     this._cutaway(this.mode === 'follow' && this.view === 'side');
+    // from behind, the camera can be where the train is: don't draw the train then, so the runners stay in view
+    this.insideTrain = this.mode === 'follow' && this.view === 'chase' && this.pos.z > this.race.sweeper.z - 3;
 
     this.clock += raw;
     this.trauma = Math.max(0, this.trauma - raw * 1.6);

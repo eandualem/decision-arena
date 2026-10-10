@@ -251,7 +251,8 @@ export class Race {
   _updateSweeperRig(dt, raw) {
     const S = this.sweeper;
     S.rig.object.position.set(0, 0, S.z);
-    S.rig.object.visible = S.z < 4;   // out of sight among the trains parked behind the start line
+    // out of sight among the trains parked behind the start line, and while the chase camera is where it is
+    S.rig.object.visible = S.z < 4 && !this.camera.insideTrain;
     S.s.mode = this.state === 'running' ? 'run' : 'idle';
     S.s.speed = S.speed;
     S.rig.update(this.state === 'running' ? dt : raw, S.s);
