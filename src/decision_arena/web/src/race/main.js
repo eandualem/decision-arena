@@ -91,6 +91,9 @@ const runners = Math.max(2, Math.min(6, +params.get('runners') || 4));
 race.setup(botSeats(runners));
 hud.build();
 hud._onState(race.state);
+ctx.events.on(EV.RUN_END, ({ winner }) => {
+  if (winner && !matchMedia('(prefers-reduced-motion: reduce)').matches) ctx.fx.burst('confetti');
+});
 addEventListener('keydown', (e) => {
   if (e.repeat || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey ||
       e.target.closest?.('input, select, textarea, [contenteditable]')) return;

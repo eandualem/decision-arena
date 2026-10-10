@@ -209,7 +209,8 @@ export class AudioSystem {
     // game over: stinger (or the new-best fanfare) once RUN_RESULTS has had a chance to arrive
     if (this._pendingGameOver) {
       this._pendingGameOver = false;
-      if (this._results && this._results.isNewBest) { this.play('highScore', { delay: 0.1 }); this._menuAt = now + 3.4; }
+      // Decision Arena ends with a winner, so use the fanfare rather than the defeat jingle.
+      if (this.ctx.game?.winner || this._results?.isNewBest) { this.play('highScore', { delay: 0.1 }); this._menuAt = now + 3.4; }
       else { this.M.stinger('gameover'); this._menuAt = now + 3.0; }
     }
     if (this._menuAt && now >= this._menuAt) {

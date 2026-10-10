@@ -58,21 +58,22 @@ export class Hud {
     this.edge = $('.edge-watch'); this.edgeValue = $('.edge-head strong'); this.edgeBar = $('.edge-track i'); this.edgeName = $('.edge-note span');
     this.cameraButton = $('.camera'); this.soundButton = $('.sound');
     for (const button of this.root.querySelectorAll('.primary')) button.onclick = () => { button.blur(); onStart(); };
-    this.cameraButton.onclick = () => this.toggleCamera();
-    this.soundButton.onclick = () => this.toggleSound();
+    this.cameraButton.onclick = (e) => { this.toggleCamera(); if (e.detail > 0) this.cameraButton.blur(); };
+    this.soundButton.onclick = (e) => { this.toggleSound(); if (e.detail > 0) this.soundButton.blur(); };
     this.rows = new Map(); this.tags = new Map(); this.portraits = new Map();
     this._v = new THREE.Vector3(); this._placed = [];
     this._calloutUntil = 0; this._calloutPriority = 0; this._countUntil = 0; this._resultsAt = Infinity;
     this._nextBoard = 0; this.muted = false;
+    this._incidents = { crash: [], out: [] };
     ctx.events.on(EV.COUNTDOWN, ({ n }) => this._count(n));
     ctx.events.on(EV.STATE, ({ state }) => this._onState(state));
     ctx.events.on(EV.CRASH, ({ runner }) => {
       const r = race.runners[runner];
-      if (r) this._announce('Crash', r.name, 'Back up soon. The ground keeps moving.', '#ffad82', 2);
+      if (r) this._incidents.crash.push(r);
     });
     ctx.events.on(EV.CAUGHT, ({ runner }) => {
       const r = race.runners[runner];
-      if (r) this._announce('Eliminated', r.name, 'Taken by the collapse', r.color, 4);
+      if (r) this._incidents.out.push(r);
     });
     ctx.events.on(EV.POWERUP_START, ({ runner, type }) => {
       const r = race.runners[runner];
@@ -139,6 +140,7 @@ export class Hud {
       this.callout.classList.remove('show'); this._calloutUntil = 0;
       this.countdown.hidden = true; this._countUntil = 0;
       this._leader = null; this._candidate = null; this._candidateAt = 0; this._finalTwo = false;
+      this._incidents.crash.length = this._incidents.out.length = 0;
     } else if (state === 'gameover') {
       this.countdown.hidden = true;
       this._resultsAt = this.ctx.realTime + 1.6;
@@ -156,7 +158,7 @@ export class Hud {
     const numeral = document.createElement('strong');
     numeral.textContent = n > 0 ? String(n) : 'GO';
     this.countdown.querySelector('strong').replaceWith(numeral);
-    this._countUntil = this.ctx.realTime + (n > 0 ? 0.75 : 0.65);
+    this._countUntil = n > 0 ? Infinity : this.ctx.realTime + 0.65;
   }
 
   _announce(label, title, detail, color, priority) {
@@ -196,6 +198,14 @@ export class Hud {
 
   update() {
     const now = this.ctx.realTime, race = this.race;
+    // Collapse can take several runners in the same frame. Announce them together, after all events arrive.
+    const out = this._incidents.out, crash = this._incidents.crash, group = out.length ? out : crash;
+    if (group.length) {
+      this._announce(out.length ? 'Eliminated' : 'Crash', group.map((r) => r.name).join(' + '),
+        out.length ? 'Taken by the collapse' : 'Back up soon. The ground keeps moving.',
+        out.length && group.length === 1 ? group[0].color : '#ffad82', out.length ? 4 : 2);
+      out.length = crash.length = 0;
+    }
     if (now > this._calloutUntil) this.callout.classList.remove('show');
     if (now > this._countUntil) this.countdown.hidden = true;
     if (race.state === 'gameover' && now >= this._resultsAt) {

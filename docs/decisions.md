@@ -98,8 +98,9 @@ animated standings at the edge of the screen, mark crashes and eliminations,
 and show how much ground the last runner has before the collapse. Brief
 callouts highlight a change of leader and the final two. At the finish, leave
 the winner visible for a moment before showing every runner's placing,
-survival time, coins and crashes. Camera and sound controls work by button or
-keyboard (**C** and **M**).
+survival time, coins and crashes. A brief confetti burst and the engine's
+victory fanfare celebrate the winner. Camera and sound controls work by
+button or keyboard (**C** and **M**).
 
 **Why.** A viewer should understand the stakes and the result without knowing
 the game. The lineup uses portraits rendered from the existing characters,
