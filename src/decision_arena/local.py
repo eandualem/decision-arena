@@ -102,12 +102,17 @@ def laya(ready_seconds: float = 1800.0) -> DecisionAPI:
             except (httpx.HTTPError, ValueError, AttributeError):
                 pass
             time.sleep(0.5)
-        http.post(
-            f"{url}/v1/systemone",
-            json=WARM_UP,
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=60.0,
-        )
+        try:
+            warm = http.post(
+                f"{url}/v1/systemone",
+                json=WARM_UP,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=60.0,
+            )
+            warm.raise_for_status()
+        except httpx.HTTPError as exc:
+            process.kill()
+            raise MissingKey(f"Laya started but could not answer ({exc}); see {log_path}") from exc
     model = DecisionAPI("Laya", f"{url}/v1/systemone", "laya", token, local=True)
     model.process = process  # held so the pipe, and so the server, lives as long as we do
     return model

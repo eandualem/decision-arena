@@ -29,6 +29,8 @@ class Handler(BaseHTTPRequestHandler):
         self.reply(200, {"status": "ok"})
 
     def do_POST(self):
+        if os.environ.get("FAKE_BROKEN"):
+            return self.reply(500, {"error": "inference failed"})
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         if self.headers.get("authorization") != "Bearer " + os.environ["LAYA_API_KEY"]:
             return self.reply(401, {"error": "unauthorized"})
@@ -51,7 +53,7 @@ def test_without_the_engine_laya_says_how_to_install(monkeypatch, tmp_path):
         local.laya()
 
 
-def test_laya_starts_its_server_and_answers(monkeypatch, tmp_path):
+def fake_engine(monkeypatch, tmp_path):
     engine = tmp_path / "tools" / "laya" / "bin"
     engine.mkdir(parents=True)
     (engine / "python").symlink_to(sys.executable)
@@ -61,6 +63,9 @@ def test_laya_starts_its_server_and_answers(monkeypatch, tmp_path):
     monkeypatch.setenv("UV_TOOL_DIR", str(tmp_path / "tools"))
     monkeypatch.setenv("PYTHONPATH", str(tmp_path / "pkg"))
 
+
+def test_laya_starts_its_server_and_answers(monkeypatch, tmp_path):
+    fake_engine(monkeypatch, tmp_path)
     model = local.laya(ready_seconds=20)
     try:
         answer = asyncio.run(model.decide(Game(24, 18, 2).question(0)))
@@ -70,3 +75,10 @@ def test_laya_starts_its_server_and_answers(monkeypatch, tmp_path):
         model.process.wait(timeout=5)
     assert model.process.returncode == 0
     assert os.environ.get("LAYA_API_KEY") is None  # the token stays with the server
+
+
+def test_a_server_that_cannot_answer_fails_at_startup(monkeypatch, tmp_path):
+    fake_engine(monkeypatch, tmp_path)
+    monkeypatch.setenv("FAKE_BROKEN", "1")
+    with pytest.raises(apis.MissingKey, match="could not answer"):
+        local.laya(ready_seconds=20)
