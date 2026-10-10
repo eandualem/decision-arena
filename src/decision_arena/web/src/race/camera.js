@@ -39,7 +39,7 @@ export class PackCamera {
     for (const r of list) {
       const b = r.b;
       lead = Math.min(lead, b.z); rear = Math.max(rear, b.z);
-      sx += b.x; sy += r.player.flight ? Math.min(b.y, 4) : b.y;
+      sx += b.x; sy += b.y;
       top = Math.max(top, b.y); bottom = Math.min(bottom, b.y);
     }
     const n = Math.max(1, list.length);

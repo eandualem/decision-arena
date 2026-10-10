@@ -32,6 +32,7 @@ export class Race {
       jetpack: false, pogo: false, headstart: false, magnet: false, sneakers: false, multiplier: false, hoverboard: false, invulnerable: false,
       chaserZ: 30, chaserVisible: false,
     };
+    this.focus = { ...this.info };
     this.runners = [];
     this.order = [];
     this.rig = null;
@@ -51,6 +52,8 @@ export class Race {
   }
 
   frameInfo() { return this.info; }
+  /** Like `info`, but centred on the leader, with its power-ups: effects and sound follow the leader. */
+  focusInfo() { return this.focus; }
   isFrozen() { return false; }
 
   _set(s) {
@@ -131,7 +134,7 @@ export class Race {
     if (dt <= 0) return;
     this.t += dt;
     this.base = SPEED.start + (SPEED.max - SPEED.start) * (1 - Math.exp(-this.t / RACE.rampSeconds));
-    for (const r of this.runners) r.prevX = r.b.x;
+    for (const r of this.runners) { r.prevX = r.b.x; r.prevZ = r.b.z; }
     for (const r of this.runners) r.update(dt, this.base);
     this._contacts();
     this._updateSweeper(dt);
@@ -159,7 +162,8 @@ export class Race {
         const hb = B.rollT > 0 ? PLAYER.rollHeight : PLAYER.height;
         if (A.y >= B.y + hb - 0.15 || B.y >= A.y + ha - 0.15) continue;
         const dz = B.z - A.z;
-        if (Math.abs(dz) >= 2 * HD + 0.1) continue;
+        const passed = Math.sign((a.prevZ ?? A.z) - (b.prevZ ?? B.z)) * Math.sign(-dz) < 0;   // ran through within a step
+        if (Math.abs(dz) >= 2 * HD + 0.1 && !passed) continue;
         const mover = A.laneT < 1 ? a : B.laneT < 1 ? b : null;
         if (crossed) {
           if (A.laneT < 1) this._bounce(a);
@@ -167,7 +171,8 @@ export class Race {
           continue;
         }
         if (mover && Math.abs(dz) < 0.45) { this._bounce(mover); continue; }
-        const rear = dz > 0 ? b : a, front = rear === a ? b : a;
+        // Who was behind before this step, so a runner that passed through another within it is the rear one.
+        const rear = (a.prevZ ?? A.z) > (b.prevZ ?? B.z) ? a : b, front = rear === a ? b : a;
         rear.b.z = front.b.z + 2 * HD + 0.12;
         if (this.t - (rear.bumpT ?? -9) < RACE.bumpCooldown) continue;
         rear.bumpT = this.t;
@@ -271,5 +276,13 @@ export class Race {
     I.onTrain = false;
     I.chaserZ = this.sweeper.z; I.chaserVisible = true;
     this.rig = lead ? lead.rig : null;
+    const F = this.focus, f = lead && lead.player.flight;
+    Object.assign(F, I);
+    F.playerZ = b.z; F.distance = -b.z;
+    F.speed = this.state === 'running' && lead ? lead.speed : 0;
+    F.jetpack = !!f && f.kind === 'jetpack'; F.pogo = !!f && f.kind === 'pogo';
+    F.magnet = !!lead && lead.timers.magnet > 0; F.sneakers = !!lead && lead.timers.sneakers > 0;
+    F.multiplier = !!lead && lead.timers.boost > 0;
+    F.grounded = b.grounded && !f;
   }
 }
