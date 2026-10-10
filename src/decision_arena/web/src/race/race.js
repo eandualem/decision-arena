@@ -42,7 +42,7 @@ export class Race {
     this.base = 0;
     this.winner = null;
     this.countdown = { n: 0, t: 0 };
-    this.collapse = { z: 30, speed: 0, dustT: 0 };
+    this.collapse = { z: 30, speed: 0 };
     this.ground = new Collapse(ctx);
     this.camera = new PackCamera(ctx, this);
     this._cols = [];
@@ -115,11 +115,11 @@ export class Race {
   update(dt, raw) {
     if (this.state === 'intro') this._updateCountdown(raw);
     else if (this.state === 'running') this._updateRace(dt);
+    else if (this.state === 'gameover') this._crumbleToWinner(raw);
 
     const mode = this.state === 'running' ? 'run' : 'menu';
     for (const r of this.runners) r.updateRig(dt, raw, r.alive ? mode : 'menu');
-    // the edge advances while the race is on and stops at the finish; what already broke away keeps falling
-    // (after the finish the edge no longer moves, but the cut still takes its final position)
+    // the edge advances while the race is on, and after the finish up to the winner; what broke away keeps falling
     this.ground.update(this.state === 'gameover' ? raw : dt, this.collapse.z, this.state === 'running' || this.state === 'gameover');
     this.camera.update(raw);
     this._refreshInfo();
@@ -228,15 +228,15 @@ export class Race {
         this.camera.shake(0.35);
       }
     }
-    // dust thrown up along the edge, and a rumble as it nears the pack
-    C.dustT -= dt;
-    if (C.dustT <= 0) {
-      C.dustT = 0.06;
-      this.ctx.fx?.burst?.('land', { x: (Math.random() - 0.5) * 9, y: 0, z: C.z + Math.random() * 2 }, { hard: true });
-      if (Math.random() < 0.2) this.ctx.fx?.burst?.('crash', { x: (Math.random() - 0.5) * 8, y: 0.3, z: C.z + 1 });
-    }
+    // a rumble as the edge nears the pack (the dust and debris are the collapse's own)
     const rear = Math.max(...this.runners.filter((r) => r.alive).map((r) => r.b.z), -Infinity);
     if (C.z - rear < 10) this.camera.rumble(0.3);
+  }
+
+  /** After the finish the ground keeps breaking away, up to just behind the winner, and stops there. */
+  _crumbleToWinner(dt) {
+    const C = this.collapse, w = this.winner, stop = w ? w.b.z + 4 : C.z;
+    if (C.z > stop) C.z = Math.max(stop, C.z - Math.max(C.speed, 10) * dt);
   }
 
   // ------------------------------------------------------------------ places and the finish

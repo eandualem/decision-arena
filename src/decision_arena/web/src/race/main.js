@@ -110,6 +110,7 @@ renderer.setAnimationLoop((now) => {
   ctx.level.update(dt, info);
   race.update(dt, raw);
   ctx.env.update(dt, info);
+  race.camera.flatten();
   ctx.fx.update(dt, race.focusInfo());
   ctx.audio.update(raw, race.focusInfo());
   hud.update();

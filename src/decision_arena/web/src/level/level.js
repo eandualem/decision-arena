@@ -96,6 +96,17 @@ export class Level {
     this._recPool.push(r);
   }
   _removeRec(r) { const i = this.recs.indexOf(r); if (i >= 0) this._release(i); }
+  /** Decision Arena: drop an obstacle's record but keep its visual, which the caller (the collapse) now owns
+   *  and removes itself (vis.removeTrain / vis.removeProp). Returns the train handle or the prop id. */
+  detach(r) {
+    const i = this.recs.indexOf(r);
+    if (i < 0) return null;
+    const v = r.kind === 'train' ? r.vis : r.prop;
+    if (r.link && r.link.link === r) r.link.link = null;
+    r.vis = null; r.prop = -1;
+    this._release(i);
+    return v;
+  }
 
   /** Static train (zNear = world maxZ). ramp: add a ramp in front of it. */
   _addTrain(lane, zNear, cars, liv = 0, seed = 1, ramp = false) {

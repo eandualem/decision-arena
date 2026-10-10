@@ -39,19 +39,26 @@ watch and practical for only two to four players.
 - **Crashes.** A crash knocks a runner down for 0.7 s. It then gets up and
   runs through obstacles for 2 s while it gets going again. A crash costs
   ground rather than ending the race.
-- **The collapse.** The ground falls away behind the pack. The world is cut
-  cleanly at the edge, and the edge sheds real debris as it advances:
-  chunks of ballast, sleepers and rails, and pieces of every train or
-  barrier it passes, tumbling into a dark pit. The edge is at most 30 m
-  behind the leader at the start, closing to 6 m. A runner it reaches
-  tumbles down with the debris and is out, so a crash early in the race can
-  be survived and a crash late in it cannot. The last runner left wins.
-- **The camera.** A director cuts between close shots, like a sports
-  broadcast: behind the leaders, the whole pack, a low fast angle and a look
-  back at the leaders' faces. It cuts to a danger shot when the ground is
-  about to take someone, and to the winner at the finish. Every shot stays
-  over the track, so the buildings on both sides stay whole. **C** switches
-  to a fixed view of the whole pack from behind.
+- **The collapse.** The ground falls away behind the pack. The edge is at
+  most 30 m behind the leader at the start, closing to 6 m. A runner it
+  reaches tumbles into the chasm and is out, so a crash early in the race
+  can be survived and a crash late in it cannot. The last runner left wins,
+  and the ground keeps breaking up to just behind the winner. What the
+  ground takes keeps its shape as it goes. The track breaks off in slabs
+  (ballast, sleepers and rails on a block of soil) that tip over the lip at
+  slightly different moments, so the edge is ragged. Trains, ramps and
+  barriers stay whole: each holds until about a third of it hangs over the
+  edge, then loses its balance, tips back until it stands almost on end,
+  and drops. Buildings sink and lean back into the chasm in one piece.
+  Rubble falls with them, and dust billows up along the whole edge. The
+  broken ground shows layers of earth, falling away into a dark chasm.
+- **The camera.** One steady view from behind and to the right, 45 degrees
+  off the track, looking along it. It shows every runner, what is coming at
+  them and the ground breaking away behind them, and pulls back only as far
+  as the pack needs (13 to 34 m). Scenery on the near side is cut away, and
+  a rail yard of idle tracks takes its place, so nothing stands between the
+  camera and the race. At the finish it settles on the winner. **C**
+  switches to a view of the pack from straight behind.
 
 **Why.** Every rule creates contact between runners: overtakes, blocks,
 comebacks and a pressure that rises over the race.
@@ -60,9 +67,12 @@ comebacks and a pressure that rises over the race.
 In simulated races most runners went out within seconds, and the sweeper
 never mattered. A chaser on the track (a sweeping machine, then a runaway
 train): it had to pass through the trains on the track. Moving the ground's
-vertices down: connected surfaces folded instead of breaking. One wide shot
-fitting every runner (from behind, from the side, from 45 degrees): from far
-away it hid either the obstacles ahead or showed the world's cut-away edge.
+vertices down: connected surfaces folded instead of breaking. Breaking
+trains and buildings into boxes of debris: a train that shatters into cubes
+does not look like a train falling. A camera director cutting between close
+shots like a sports broadcast: close shots hid the other runners, so you
+could not follow the race. Showing the earth under the cut-away near side:
+a cliff and a dark void took a third of the screen.
 
 ## 3. How a model decides: no ticks
 
