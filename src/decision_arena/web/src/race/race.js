@@ -213,7 +213,7 @@ export class Race {
   _crumbleToWinner(dt) {
     const C = this.collapse, w = this.winner;
     if (!w || dt <= 0) return;
-    C.z = Math.max(w.b.z + 3, C.z - Math.max(C.speed, 10) * dt);
+    C.z = Math.min(C.z, Math.max(w.b.z + 3, C.z - Math.max(C.speed, 10) * dt));   // never back
   }
 
   // ------------------------------------------------------------------ the collapsing ground
