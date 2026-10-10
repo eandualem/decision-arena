@@ -98,7 +98,9 @@ async def play(game: Game, players: list[Seat], settings: Settings, emit: Emit, 
             if task not in pending:
                 try:
                     answer, latency, arrived = task.result()
-                except Exception as exc:  # a failed answer is a missed tick, never a crash
+                # A failed answer is a missed tick, never a crash. The task is done, so a
+                # CancelledError here is the model's own, not a cancellation of this game.
+                except (Exception, asyncio.CancelledError) as exc:
                     log.warning("%s: %s", seat.name, exc)
                 else:
                     if settings.clock and arrived > started + settings.tick:
@@ -160,7 +162,8 @@ def _frame(
         "width": game.width,
         "height": game.height,
         "cycles": [
-            {"trail": c.trail, "heading": c.heading, "alive": c.alive} for c in game.cycles
+            {"trail": list(c.trail), "heading": c.heading, "alive": c.alive}
+            for c in game.cycles
         ],
         "players": [p.panel() for p in players],
         "decisions": decisions,

@@ -122,3 +122,16 @@ class Blocking:
 def test_an_answer_finished_after_the_tick_is_missed_even_if_it_blocked_the_clock():
     players, _ = run([Greedy(0), Blocking()], Settings(tick=0.05))
     assert players[1].missed == players[1].asked > 0
+
+
+class Cancelling:
+    name = "Cancelling"
+
+    async def decide(self, question):
+        raise asyncio.CancelledError
+
+
+def test_a_model_that_raises_cancelled_misses_the_tick_and_the_game_goes_on():
+    players, frames = run([Greedy(0), Cancelling()], Settings(tick=0.02))
+    assert players[1].missed == players[1].asked > 1
+    assert frames[0]["cycles"][0]["trail"] == [frames[0]["cycles"][0]["trail"][0]]  # kept as sent
