@@ -119,7 +119,8 @@ export class Race {
     const mode = this.state === 'running' ? 'run' : 'menu';
     for (const r of this.runners) r.updateRig(dt, raw, r.alive ? mode : 'menu');
     // the edge advances while the race is on and stops at the finish; what already broke away keeps falling
-    this.ground.update(this.state === 'gameover' ? raw : dt, this.collapse.z, this.state === 'running');
+    // (after the finish the edge no longer moves, but the cut still takes its final position)
+    this.ground.update(this.state === 'gameover' ? raw : dt, this.collapse.z, this.state === 'running' || this.state === 'gameover');
     this.camera.update(raw);
     this._refreshInfo();
   }

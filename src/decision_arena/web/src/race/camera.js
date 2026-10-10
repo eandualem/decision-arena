@@ -222,6 +222,7 @@ export class PackCamera {
       const k = 1 - Math.exp(-5 * raw);
       this.pos.lerp(T.pos, k); this.look.lerp(T.look, k); this.fov += (T.fov - this.fov) * k;
     } else { this.pos.copy(T.pos); this.look.copy(T.look); this.fov = T.fov; }
+    this.pos.y = Math.min(this.pos.y, CEILING);   // also mid-transition: never up into a bridge
 
     this.clock += raw;
     this.trauma = Math.max(0, this.trauma - raw * 1.6);
