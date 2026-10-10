@@ -1,24 +1,27 @@
 # Decision Arena — contributor notes
 
 Decision Arena is a small open source demo in which fast decision models
-play a real-time light-cycle game against each other, so you can watch both
-how well and how fast each one decides. It is deliberately small, and
-staying small is a feature: before adding something, check it earns its
-place in the demo.
+race each other in a real-time 3D runner game, so you can watch both how
+well and how fast each one decides. It is deliberately small, and staying
+small is a feature: before adding something, check it earns its place in
+the demo.
 
 ## The game
 
-- Two to four light cycles on a grid. Each leaves a permanent trail;
-  hitting a wall or any trail eliminates that cycle, and the last one alive
-  wins.
-- Real time on a fixed, tunable tick (start around 150–250 ms). Every model
-  gets the same state snapshot at the same moment and answers left,
-  straight or right. An answer that hasn't arrived by the next tick counts
-  as "keep straight", so slowness is visible.
-- Fairness: mirrored or symmetric starts, best-of-N series with a win
-  tally, and a "no clock" mode where the game waits for every model.
-  Comparing the two modes separates decision quality from speed; that is
-  the honest story the demo tells.
+- Four to six runners share one three-lane track with trains, barriers,
+  ramps and power-ups, built on the Rail Dash runner engine. A chaser
+  closes in from behind; crashing or being caught puts a runner out, and
+  the last runner standing wins.
+- Runners compete directly: they can block, bump and overtake each other,
+  and a runner's pace rises while it runs cleanly and drops when it
+  stumbles.
+- No ticks. Each model gets the current state, answers with one move
+  (left, right, jump, roll or keep going), and gets the next state the
+  moment its answer is applied. A fast model makes several decisions while
+  a slow one makes one, and the world keeps moving while a model thinks;
+  that is the speed story the demo tells.
+- Fairness: everyone runs the same track from a shared start, and the
+  state a model sees includes what its runner is already doing.
 
 ## Decision models
 
@@ -39,25 +42,27 @@ place in the demo.
 
 ## Look and feel
 
-- Elegant, clear and very simple; don't overcomplicate it. Glowing trails,
-  smooth motion and a crisp crash moment.
+- Exciting and playful, but clear: a camera that keeps the whole pack in
+  view, a colour and name per runner, and crisp crashes and overtakes.
 - One toggle shows or hides a decision panel. Per model it shows the
-  choice, its probabilities or confidence, latency per move and missed
-  ticks. Hidden, the screen is just the game.
-- A 20–30 second match should look good as a screen recording.
+  choice, its probabilities or confidence, latency and decisions per
+  second. Hidden, the screen is just the race.
+- A race of a minute or two should look good as a screen recording.
 - It runs locally with one command. The README has a GIF or screenshot and
   "add your own model" instructions.
 
 ## Out of scope
 
-Accounts, hosting, network leaderboards and other games, for now.
+Accounts, hosting, network leaderboards, and Rail Dash's single-player
+progression (shop, missions, rewards), for now.
 
 ## Prior art
 
 Turn-based arenas exist (SnakeBench, TinyAIArena, Kaggle Game Arena), as do
-real-time snake arenas (sujee/llm-snake-arena) and a Jev snake benchmark
-(shreytalreja25/snake-game-benchmark). A real-time light-cycle arena for
-decision models is the gap this fills.
+real-time snake arenas (sujee/llm-snake-arena), a Jev snake benchmark
+(shreytalreja25/snake-game-benchmark) and two-player fighting-game matches
+between language models. A real-time race in which four to six decision
+models compete at once, each at its own speed, is the gap this fills.
 
 ## Working on it
 
