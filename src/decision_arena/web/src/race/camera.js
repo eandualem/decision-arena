@@ -129,10 +129,12 @@ export class PackCamera {
     this.spread = damp(this.spread, clamp(rear - p.lead, 0, 45), 3, raw);
     this.rise = damp(this.rise || 0, Math.max(0, p.top - p.bottom - 1.5), 3, raw);
     const s = this.spread, up = this.rise;
-    // stand back far enough for the whole pack, raised like a stadium camera (about 15 degrees down)
+    // stand back far enough for the whole pack, measured from where the camera actually is (it trails a fast
+    // pack a little), raised like a stadium camera; on a narrow screen the width decides, so step further back
     const aspect = this.cam.aspect || 1.6;
-    const halfW = s / 2 + 4;
-    const dist = clamp(halfW / (Math.tan(0.5) * Math.max(0.8, aspect / 1.6)), 13, 46) + up * 0.6;
+    const halfW = Math.max(s / 2, Math.abs(p.lead - this.cz), Math.abs(rear - this.cz)) + 4;
+    const half = Math.min(0.5, Math.atan(Math.tan(32 * Math.PI / 180) * aspect));   // widest half-angle at a 64 degree cap
+    const dist = Math.max(13, halfW / Math.tan(half)) + up * 0.6;
     // aim above the runners, so the track sits in the lower third with the street rising behind it
     out.pos.set(dist, this.fy + 1 + dist * 0.22 + up * 0.5, this.cz);
     out.look.set(0, this.fy + 1.1 + dist * 0.1 + up * 0.45, this.cz);

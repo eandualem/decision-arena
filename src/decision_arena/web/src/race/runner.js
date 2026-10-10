@@ -200,6 +200,9 @@ export class Runner {
     const side = b.x > 0.1 ? 1 : b.x < -0.1 ? -1 : Math.random() < 0.5 ? -1 : 1;
     this.fly = { t: 0, vx: side * (5 + Math.random() * 2), vy: 11 + Math.random() * 3, vz: -6, spin: side * (7 + Math.random() * 4) };
     this.player.flight = null;
+    this.player.blinkT = 0; this.player.invulnT = 0;   // a crash's blinking ends: the fly-off must be seen
+    this._rs.blink = false;
+    this.rig.object.visible = true;
     this.ctx.events.emit(EV.CAUGHT, { x: b.x, y: b.y, z: b.z, runner: this.index });
     this.rig.trigger?.('caught');
     this._out('caught');
@@ -306,7 +309,7 @@ export class Runner {
 
   _flyOff(raw) {
     const f = this.fly, b = this.b, o = this.rig.object;
-    if (!o.visible) return;
+    if (f.t > 1.4) { o.visible = false; return; }
     f.t += raw;
     b.x += f.vx * raw; b.y = Math.max(0, b.y + f.vy * raw); b.z += f.vz * raw;
     f.vy -= 30 * raw;
@@ -315,7 +318,6 @@ export class Runner {
     o.rotation.x += f.spin * 0.4 * raw;
     this._rs.mode = 'dead';
     this.rig.update(raw, this._rs);
-    if (f.t > 1.4) o.visible = false;
   }
 
   dispose() {
