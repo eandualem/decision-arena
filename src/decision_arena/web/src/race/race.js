@@ -117,7 +117,9 @@ export class Race {
     for (const r of this.runners) r.updateRig(dt, raw, r.alive ? mode : 'menu');
     // the ground falls away behind the edge once the race is on, and stays down until the next grid
     const on = this.state === 'running' || this.state === 'gameover';
-    collapseUniform.value.set(this.collapse.z, on ? 1 : 0, this.state === 'gameover' ? this.t - this.finishT : 0, 0);
+    // once the edge has stopped behind the winner, what is falling keeps falling on the clock alone
+    const after = this.state === 'gameover' && this.stopT != null ? this.t - this.stopT : 0;
+    collapseUniform.value.set(this.collapse.z, on ? 1 : 0, after, 0);
     this.camera.update(raw);
     this._refreshInfo();
   }
@@ -213,8 +215,10 @@ export class Race {
   _crumbleToWinner(dt) {
     const C = this.collapse, w = this.winner;
     if (dt > 0) this.t += dt;   // the race clock runs on, so what is falling keeps falling
-    if (!w || dt <= 0) return;
-    C.z = Math.min(C.z, Math.max(w.b.z + 3, C.z - Math.max(C.speed, 10) * dt));   // never back
+    if (dt <= 0 || this.stopT != null) return;
+    const stop = w ? w.b.z + 3 : C.z;
+    C.z = Math.min(C.z, Math.max(stop, C.z - Math.max(C.speed, 10) * dt));   // never back
+    if (C.z <= stop + 1e-6) this.stopT = this.t;
   }
 
   // ------------------------------------------------------------------ the collapsing ground
@@ -261,7 +265,7 @@ export class Race {
 
   _finish(winner) {
     this.winner = winner || null;
-    this.finishT = this.t;
+    this.stopT = null;
     if (winner && winner.alive) {
       winner.status = 'won';
       winner.rig.trigger?.('celebrate');
