@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decision Arena</title>
+<style>
+  :root {
+    --bg: #04060c;
+    --ink: #e6edf7;
+    --dim: #6b7790;
+    --line: rgba(140, 170, 220, 0.07);
+    --card: rgba(16, 22, 36, 0.86);
+    --miss: #ff5d5d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  #app { display: grid; grid-template-rows: auto 1fr; height: 100%; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 14px 22px; letter-spacing: .02em; }
+  .brand { font-weight: 600; letter-spacing: .22em; font-size: 12px; color: var(--dim); }
+  #tally { display: flex; gap: 22px; font-variant-numeric: tabular-nums; flex-wrap: wrap; justify-content: center; }
+  .who { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 10px currentColor; background: currentColor; }
+  .wins { font-weight: 700; font-size: 16px; }
+  #meta { color: var(--dim); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
+  main { position: relative; display: flex; min-height: 0; }
+  #stage { flex: 1; position: relative; min-width: 0; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #panel { width: 270px; padding: 0 18px 18px 0; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+  body.bare #panel { display: none; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px;
+    font-variant-numeric: tabular-nums; }
+  .card h3 { margin: 0 0 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .card h3 .out { margin-left: auto; color: var(--dim); font-weight: 400; font-size: 11px; }
+  .bar { display: grid; grid-template-columns: 58px 1fr 38px; align-items: center; gap: 8px; font-size: 12px;
+    color: var(--dim); margin: 3px 0; }
+  .bar .track { height: 6px; background: rgba(255,255,255,.06); border-radius: 3px; overflow: hidden; }
+  .bar .fill { height: 100%; width: 0; border-radius: 3px; transition: width .12s ease-out; opacity: .45; }
+  .bar.chosen { color: var(--ink); }
+  .bar.chosen .fill { opacity: 1; }
+  .bar .pct { text-align: right; }
+  .stats { margin-top: 8px; font-size: 11px; color: var(--dim); display: flex; justify-content: space-between; }
+  .missed { color: var(--miss); }
+  #overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; pointer-events: none; text-align: center; }
+  #headline { font-size: clamp(26px, 5vw, 54px); font-weight: 700; letter-spacing: .02em;
+    text-shadow: 0 0 24px currentColor; opacity: 0; transition: opacity .35s; }
+  #sub { color: var(--dim); font-size: 14px; opacity: 0; transition: opacity .35s; }
+  .show { opacity: 1 !important; }
+  button { pointer-events: auto; background: none; color: var(--ink); border: 1px solid rgba(255,255,255,.18);
+    border-radius: 999px; padding: 8px 18px; font: inherit; cursor: pointer; }
+  button:hover { border-color: rgba(255,255,255,.4); }
+  #toggle { padding: 4px 12px; font-size: 12px; color: var(--dim); margin-left: 10px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">DECISION ARENA</div>
+    <div id="tally"></div>
+    <div id="meta"><span id="status">connecting…</span><button id="toggle" title="Show or hide decisions (D)">decisions</button></div>
+  </header>
+  <main>
+    <div id="stage">
+      <canvas id="board"></canvas>
+      <div id="overlay">
+        <div id="headline"></div>
+        <div id="sub"></div>
+        <button id="start" hidden>Start · Space</button>
+      </div>
+    </div>
+    <aside id="panel"></aside>
+  </main>
+</div>
+<script>
+const COLORS = ["#22d3ee", "#f472b6", "#facc15", "#a3e635"];
+const ARROWS = { left: "←", straight: "↑", right: "→" };
+const canvas = document.getElementById("board");
+const ctx = canvas.getContext("2d");
+const $ = (id) => document.getElementById(id);
+
+let names = [], size = [24, 18], prev = null, cur = null, arrived = 0, running = false;
+let sparks = [], rings = [], flash = 0, cell = 10, origin = [0, 0];
+
+const socket = new WebSocket(`ws://${location.host}/ws`);
+socket.onmessage = (event) => receive(JSON.parse(event.data));
+socket.onclose = () => { $("status").textContent = "disconnected"; };
+
+function start() {
+  if (running || socket.readyState !== WebSocket.OPEN) return;
+  running = true; prev = cur = null;
+  hide(); $("start").hidden = true;
+  socket.send(JSON.stringify({ type: "start" }));
+}
+$("start").onclick = start;
+$("toggle").onclick = () => document.body.classList.toggle("bare");
+addEventListener("keydown", (e) => {
+  if (e.code === "Space") { e.preventDefault(); start(); }
+  if (e.key === "d" || e.key === "D") document.body.classList.toggle("bare");
+});
+
+function receive(m) {
+  if (m.type === "hello") {
+    names = m.players; size = [m.width, m.height]; tally(names.map((name) => ({ name, wins: 0 })));
+    $("status").textContent = "ready";
+    say("Decision Arena", names.join("  vs  "), "#e6edf7");
+    $("start").hidden = false;
+  } else if (m.type === "frame") {
+    if (m.tick === 0) { prev = null; hide(); }
+    prev = cur && cur.game === m.game ? cur : null;
+    cur = m; arrived = performance.now();
+    for (const i of m.crashed) crash(i);
+    tally(m.players); panel(m);
+    $("status").textContent = `Game ${m.game} of ${m.games} · ${m.clock ? m.tickMs + " ms clock" : "no clock"}`;
+    if (m.over) {
+      const w = m.winner;
+      say(w === null ? "Draw" : `${m.players[w].name} wins`, "", w === null ? "#e6edf7" : COLORS[w]);
+    }
+  } else if (m.type === "series") {
+    running = false;
+    const ranked = m.players.map((p, i) => ({ ...p, i })).sort((a, b) => b.wins - a.wins);
+    const top = ranked[0], tie = ranked[1] && ranked[1].wins === top.wins;
+    const score = m.players.map((p) => p.wins).join("–");
+    say(tie ? "Series drawn" : `${top.name} takes the series`, score, tie ? "#e6edf7" : COLORS[top.i]);
+    $("start").textContent = "Play again · Space"; $("start").hidden = false;
+  }
+}
+
+function say(head, sub, color) {
+  $("headline").textContent = head; $("headline").style.color = color;
+  $("sub").textContent = sub;
+  $("headline").classList.add("show"); $("sub").classList.toggle("show", !!sub);
+}
+function hide() { $("headline").classList.remove("show"); $("sub").classList.remove("show"); }
+
+function tally(players) {
+  $("tally").replaceChildren(...players.map((p, i) => {
+    const el = document.createElement("div"); el.className = "who"; el.style.color = COLORS[i];
+    el.innerHTML = `<span class="dot"></span><span></span><span class="wins"></span>`;
+    el.children[1].textContent = p.name; el.children[1].style.color = "var(--ink)";
+    el.children[2].textContent = p.wins;
+    return el;
+  }));
+}
+
+function panel(m) {
+  $("panel").replaceChildren(...m.players.map((p, i) => {
+    const d = m.decisions[i], alive = m.cycles[i].alive;
+    const card = document.createElement("div"); card.className = "card";
+    const h = document.createElement("h3");
+    h.innerHTML = `<span class="dot" style="color:${COLORS[i]}"></span><span></span><span class="out"></span>`;
+    h.children[1].textContent = p.name;
+    h.children[2].textContent = alive ? (d && d.missed ? "missed · straight" : "") : "out";
+    if (d && d.missed) h.children[2].className = "out missed";
+    card.append(h);
+    for (const move of ["left", "straight", "right"]) {
+      const prob = d && d.probabilities ? d.probabilities[move] ?? 0 : 0;
+      const row = document.createElement("div");
+      row.className = "bar" + (d && !d.missed && d.move === move ? " chosen" : "");
+      row.innerHTML = `<span>${ARROWS[move]} ${move}</span><span class="track"><span class="fill"></span></span><span class="pct"></span>`;
+      row.querySelector(".fill").style.width = `${Math.round(prob * 100)}%`;
+      row.querySelector(".fill").style.background = COLORS[i];
+      row.querySelector(".pct").textContent = d && d.probabilities ? `${Math.round(prob * 100)}%` : "";
+      card.append(row);
+    }
+    const stats = document.createElement("div"); stats.className = "stats";
+    const last = d && d.latencyMs != null ? `${d.latencyMs} ms` : "—";
+    const median = p.medianMs != null ? `${p.medianMs} ms` : "—";
+    stats.innerHTML = `<span></span><span></span>`;
+    stats.children[0].textContent = `last ${last} · median ${median}`;
+    stats.children[1].textContent = `missed ${p.missed}/${p.asked}`;
+    if (p.missed) stats.children[1].className = "missed";
+    card.append(stats);
+    return card;
+  }));
+}
+
+function crash(i) {
+  const c = cur.cycles[i], [x, y] = c.trail[c.trail.length - 1];
+  const [px, py] = center(x, y);
+  rings.push({ x: px, y: py, t: performance.now(), color: COLORS[i] });
+  for (let k = 0; k < 28; k++) {
+    const a = Math.random() * Math.PI * 2, v = (0.6 + Math.random() * 1.8) * cell / 16;
+    sparks.push({ x: px, y: py, vx: Math.cos(a) * v, vy: Math.sin(a) * v, t: performance.now(), color: COLORS[i] });
+  }
+  flash = 1;
+}
+
+function center(x, y) { return [origin[0] + (x + 0.5) * cell, origin[1] + (y + 0.5) * cell]; }
+
+function resize() {
+  const r = canvas.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+  canvas.width = r.width * dpr; canvas.height = r.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener("resize", resize);
+
+function draw(now) {
+  const r = canvas.getBoundingClientRect();
+  if (canvas.width !== Math.round(r.width * (devicePixelRatio || 1))) resize();
+  ctx.clearRect(0, 0, r.width, r.height);
+  const f = cur, [w, h] = f ? [f.width, f.height] : size, pad = 24;
+  cell = Math.max(4, Math.min((r.width - pad * 2) / w, (r.height - pad * 2) / h));
+  origin = [(r.width - cell * w) / 2, (r.height - cell * h) / 2];
+
+  // Arena floor and border
+  ctx.strokeStyle = "rgba(140,170,220,0.05)"; ctx.lineWidth = 1; ctx.beginPath();
+  for (let x = 1; x < w; x++) { ctx.moveTo(origin[0] + x * cell, origin[1]); ctx.lineTo(origin[0] + x * cell, origin[1] + h * cell); }
+  for (let y = 1; y < h; y++) { ctx.moveTo(origin[0], origin[1] + y * cell); ctx.lineTo(origin[0] + w * cell, origin[1] + y * cell); }
+  ctx.stroke();
+  ctx.save(); ctx.strokeStyle = "rgba(160,190,255,0.35)"; ctx.shadowColor = "#7aa2ff"; ctx.shadowBlur = 12;
+  ctx.strokeRect(origin[0], origin[1], w * cell, h * cell); ctx.restore();
+
+  if (f) {
+    const p = Math.min(1, (now - arrived) / f.tickMs);
+    f.cycles.forEach((c, i) => trail(c, prev && prev.cycles[i], i, p));
+  }
+
+  // Crash: an expanding ring, sparks and a short flash
+  rings = rings.filter((g) => now - g.t < 700);
+  for (const g of rings) {
+    const k = (now - g.t) / 700;
+    ctx.save(); ctx.globalAlpha = 1 - k; ctx.strokeStyle = "#fff"; ctx.shadowColor = g.color; ctx.shadowBlur = 20;
+    ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(g.x, g.y, cell * (0.5 + k * 4), 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+  }
+  sparks = sparks.filter((s) => now - s.t < 650);
+  for (const s of sparks) {
+    const k = (now - s.t) / 650, d = (now - s.t) / 16;
+    ctx.save(); ctx.globalAlpha = 1 - k; ctx.fillStyle = k < 0.2 ? "#fff" : s.color; ctx.shadowColor = s.color; ctx.shadowBlur = 8;
+    const z = Math.max(3, cell * 0.14);
+    ctx.fillRect(s.x + s.vx * d - z / 2, s.y + s.vy * d - z / 2, z, z); ctx.restore();
+  }
+  if (flash > 0.01) { ctx.fillStyle = `rgba(255,255,255,${flash * 0.12})`; ctx.fillRect(0, 0, r.width, r.height); flash *= 0.85; }
+  requestAnimationFrame(draw);
+}
+
+function trail(c, before, i, p) {
+  const pts = c.trail.map(([x, y]) => center(x, y));
+  // The newest cell grows in over the tick, so motion is continuous between frames.
+  const moved = before && pts.length > before.trail.length;
+  if (moved && pts.length > 1) {
+    const [ax, ay] = pts[pts.length - 2], [bx, by] = pts[pts.length - 1];
+    pts[pts.length - 1] = [ax + (bx - ax) * p, ay + (by - ay) * p];
+  }
+  const color = COLORS[i];
+  ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
+  ctx.globalAlpha = c.alive ? 1 : 0.28;
+  path(pts); ctx.strokeStyle = color; ctx.lineWidth = cell * 0.55; ctx.shadowColor = color; ctx.shadowBlur = cell * 1.2;
+  ctx.globalAlpha *= 0.35; ctx.stroke();
+  ctx.globalAlpha = c.alive ? 1 : 0.28; ctx.shadowBlur = cell * 0.5; ctx.lineWidth = cell * 0.22; ctx.stroke();
+  if (c.alive) {
+    const [hx, hy] = pts[pts.length - 1];
+    ctx.fillStyle = "#fff"; ctx.shadowColor = color; ctx.shadowBlur = cell * 1.6;
+    ctx.beginPath(); ctx.arc(hx, hy, cell * 0.28, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+function path(pts) {
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  if (pts.length === 1) ctx.lineTo(pts[0][0] + 0.01, pts[0][1]);
+  for (let k = 1; k < pts.length; k++) ctx.lineTo(pts[k][0], pts[k][1]);
+}
+
+resize(); requestAnimationFrame(draw);
+</script>
+</body>
+</html>

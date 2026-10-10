@@ -1,0 +1,118 @@
+"""The command: serve the page, run a series when the page asks, stream every tick."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import contextlib
+import json
+import logging
+import webbrowser
+from importlib.resources import files
+from typing import Any
+
+import uvicorn
+from starlette.applications import Starlette
+from starlette.responses import HTMLResponse
+from starlette.routing import Route, WebSocketRoute
+from starlette.websockets import WebSocket, WebSocketDisconnect
+
+from decision_arena.arena import Settings, seats, series
+from decision_arena.models import MODELS, Model
+
+
+class Arena:
+    """Runs one series at a time and sends its frames to every open page."""
+
+    def __init__(self, models: list[Model], settings: Settings) -> None:
+        self.models, self.settings = models, settings
+        self.pages: set[WebSocket] = set()
+        self.running: asyncio.Task[Any] | None = None
+
+    def start(self) -> None:
+        if self.running is None or self.running.done():
+            self.running = asyncio.create_task(series(self.models, self.settings, self.send))
+
+    async def send(self, message: dict[str, Any]) -> None:
+        text = json.dumps(message)
+        for page in list(self.pages):
+            try:
+                await page.send_text(text)
+            except Exception:  # a closed page drops out
+                self.pages.discard(page)
+
+
+def app(arena: Arena) -> Starlette:
+    page = files("decision_arena").joinpath("static/index.html").read_text()
+
+    async def index(_request: Any) -> HTMLResponse:
+        return HTMLResponse(page)
+
+    async def socket(websocket: WebSocket) -> None:
+        await websocket.accept()
+        arena.pages.add(websocket)
+        await websocket.send_text(
+            json.dumps(
+                {
+                    "type": "hello",
+                    "players": [s.name for s in seats(arena.models)],
+                    "width": arena.settings.width,
+                    "height": arena.settings.height,
+                }
+            )
+        )
+        try:
+            while True:
+                if json.loads(await websocket.receive_text()).get("type") == "start":
+                    arena.start()
+        except WebSocketDisconnect:
+            arena.pages.discard(websocket)
+
+    return Starlette(routes=[Route("/", index), WebSocketRoute("/ws", socket)])
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        prog="decision-arena", description="Decision models play a real-time light-cycle game."
+    )
+    parser.add_argument(
+        "models",
+        nargs="*",
+        default=["greedy", "greedy"],
+        help=f"two to four of: {', '.join(sorted(MODELS))} (default: greedy greedy)",
+    )
+    parser.add_argument("--tick", type=int, default=200, help="milliseconds per tick (default 200)")
+    parser.add_argument(
+        "--no-clock", action="store_true", help="wait for every model each tick"
+    )
+    parser.add_argument("--games", type=int, default=5, help="best of N games (default 5)")
+    parser.add_argument("--size", default="24x18", help="grid width x height (default 24x18)")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--no-browser", action="store_true", help="don't open the page")
+    args = parser.parse_args(argv)
+    if not 2 <= len(args.models) <= 4:
+        parser.error("choose two to four players")
+    if unknown := sorted(set(args.models) - set(MODELS)):
+        parser.error(f"unknown model: {', '.join(unknown)}")
+    width, _, height = args.size.partition("x")
+    if not (width.isdigit() and height.isdigit() and int(width) >= 8 and int(height) >= 8):
+        parser.error("--size takes WIDTHxHEIGHT, each at least 8")
+    if not 20 <= args.tick <= 5000 or args.games < 1:
+        parser.error("--tick takes 20 to 5000 ms and --games at least 1")
+    settings = Settings(
+        int(width), int(height), args.tick / 1000, not args.no_clock, args.games
+    )
+    arena = Arena([MODELS[name]() for name in args.models], settings)
+    url = f"http://127.0.0.1:{args.port}"
+    logging.basicConfig(level=logging.WARNING, format="%(message)s")
+    print(f"Decision Arena at {url}")
+
+    @contextlib.asynccontextmanager
+    async def opened(_app: Starlette) -> Any:
+        if not args.no_browser:
+            webbrowser.open(url)
+        yield
+
+    application = app(arena)
+    application.router.lifespan_context = opened
+    uvicorn.run(application, host="127.0.0.1", port=args.port, log_level="warning")
