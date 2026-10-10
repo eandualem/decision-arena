@@ -573,6 +573,7 @@ export class FX {
     if (L.ok) {
       fx = info.playerX - L.x; fy = info.playerY - L.y; fz = info.playerZ - L.z;
       if (Math.abs(fx) + Math.abs(fy) + Math.abs(fz) > 12) fx = fy = fz = 0; // teleport (reset / new run)
+      if (this.ctx.game?.runners) fx = fy = fz = 0;   // Decision Arena: several runners, so effects stay where they began
     }
     L.x = info.playerX || 0; L.y = info.playerY || 0; L.z = info.playerZ || 0; L.ok = true;
     if (!(dt > 0)) return; // frozen (paused / countdown)
