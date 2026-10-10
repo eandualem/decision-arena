@@ -14,6 +14,20 @@ const DANGER = 6;           // metres between the edge and a runner that call fo
 
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
+/** Whether the segment from p to q passes through the box c (slab method). */
+function blocks(c, p, q) {
+  let t0 = 0, t1 = 1;
+  for (const [a, b, lo, hi] of [[p.x, q.x, c.minX, c.maxX], [p.y, q.y, c.minY, c.maxY], [p.z, q.z, c.minZ, c.maxZ]]) {
+    const d = b - a;
+    if (Math.abs(d) < 1e-9) { if (a < lo || a > hi) return false; continue; }
+    let u = (lo - a) / d, v = (hi - a) / d;
+    if (u > v) [u, v] = [v, u];
+    t0 = Math.max(t0, u); t1 = Math.min(t1, v);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
 export class PackCamera {
   constructor(ctx, race) {
     this.ctx = ctx;
@@ -36,6 +50,8 @@ export class PackCamera {
     this.trauma = 0; this.clock = 0;
     this._t = { pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 60 };
     this._look = new THREE.Vector3();
+    this._cols = [];
+    this._q = new THREE.Vector3();
   }
 
   toGrid() {
@@ -197,7 +213,23 @@ export class PackCamera {
       out.pos.sub(out.look).multiplyScalar(k).add(out.look);
     }
     out.pos.x = clamp(out.pos.x, -SIDE, SIDE);
+    this._clearView(out, this.shot === 'danger' ? [this.danger].filter(Boolean) : [a, b]);
     out.pos.y = Math.min(out.pos.y, CEILING);
+  }
+
+  /** If a train or other obstacle stands between the camera and the runners it is showing, rise above it. */
+  _clearView(out, subjects) {
+    const zs = subjects.map((r) => r.b.z).concat(out.pos.z);
+    const cols = this.ctx.level.getColliders(Math.min(...zs) - 1, Math.max(...zs) + 1, this._cols);
+    for (let pass = 0; pass < 3; pass++) {
+      let top = -Infinity;
+      for (const r of subjects) {
+        const q = this._q.set(r.b.x, r.b.y + 1, r.b.z);
+        for (const c of cols) if (c.kind !== 'ramp' && blocks(c, out.pos, q)) top = Math.max(top, c.maxY);
+      }
+      if (top === -Infinity) return;
+      out.pos.y = Math.max(out.pos.y, top + 2.2);   // over the roof, then check again
+    }
   }
 
   /** How much narrower than a 16:10 screen this one is (0 on wide screens), so all three lanes stay in view. */
