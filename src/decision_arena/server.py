@@ -10,6 +10,7 @@ import logging
 import threading
 import time
 import webbrowser
+from collections.abc import Callable
 from importlib.resources import files
 from typing import Any
 
@@ -19,8 +20,17 @@ from starlette.responses import HTMLResponse
 from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
+from decision_arena import apis
 from decision_arena.arena import Settings, seats, series
-from decision_arena.models import MODELS, Model
+from decision_arena.models import Greedy, Model
+
+# The players the command knows, by the name you type.
+MODELS: dict[str, Callable[[], Model]] = {
+    "greedy": Greedy,
+    "jev": apis.jev,
+    "openai": apis.openai,
+    "perplexity": apis.perplexity,
+}
 
 
 class Arena:
@@ -127,7 +137,11 @@ def main(argv: list[str] | None = None) -> None:
     settings = Settings(
         int(width), int(height), args.tick / 1000, not args.no_clock, args.games
     )
-    arena = Arena([MODELS[name]() for name in args.models], settings)
+    try:
+        models = [MODELS[name]() for name in args.models]
+    except apis.MissingKey as exc:
+        parser.error(str(exc))
+    arena = Arena(models, settings)
     url = f"http://127.0.0.1:{args.port}"
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
     print(f"Decision Arena at {url}")

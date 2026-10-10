@@ -1,13 +1,12 @@
 """Decision models: one async method that turns a question into a move.
 
 To add your own, write a class with a `name` and an async `decide(question)` that
-returns an `Answer`, and register it in `MODELS`.
+returns an `Answer`, and register it in `MODELS` in server.py.
 """
 
 from __future__ import annotations
 
 import random
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -40,7 +39,3 @@ class Greedy:
         move = self._random.choice([m for m in MOVES if question.free[m] == most])
         return Answer(move, {m: float(m == move) for m in MOVES})
 
-
-MODELS: dict[str, Callable[[], Model]] = {
-    "greedy": Greedy,
-}
