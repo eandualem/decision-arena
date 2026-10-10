@@ -19,8 +19,9 @@ import { CURVE } from '../config.js';
 export const curveUniform = { value: new THREE.Vector3(CURVE.x, CURVE.y, CURVE.start) };
 
 // Decision Arena: the ground collapsing behind the race. Everything behind the edge (world z greater than
-// x) breaks into 1.6 m pieces that fall away, each a little later than the last (y: 1 = on). The camera's
-// world matrix turns view-space positions back into world space.
+// x) breaks into 1.6 m pieces that fall away, each a little later than the last (y: 1 = on; z: seconds of
+// extra fall once the edge has stopped, so pieces already going keep going). The camera's world matrix turns
+// view-space positions back into world space.
 export const collapseUniform = { value: new THREE.Vector4(1e9, 0, 0, 0) };
 export const camWorldUniform = { value: new THREE.Matrix4() };
 
@@ -52,7 +53,7 @@ export function installCurvedWorld() {
 		float cwHash = fract( sin( dot( cwTile, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 );
 		float cwBehind = ( cwTile.y + 0.5 ) * 1.6 - uCollapse.x - cwHash * 2.5;
 		if ( cwBehind > 0.0 ) {
-			float cwT = cwBehind / 22.0;
+			float cwT = cwBehind / 22.0 + uCollapse.z;
 			cwWorld.y -= 15.0 * cwT * cwT + cwHash * cwT * 2.0;
 			cwWorld.x += ( cwHash - 0.5 ) * 2.5 * cwT;
 			mvPosition = viewMatrix * cwWorld;
