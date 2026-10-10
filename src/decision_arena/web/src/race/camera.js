@@ -148,7 +148,9 @@ export class PackCamera {
       F.updateMatrixWorld();
       let m = 0.01;
       const fit = (x, y, z) => { const v = this._v.set(x, y, z).project(F); if (v.z < 1) m = Math.max(m, Math.abs(v.x), Math.abs(v.y)); else m = 9; };
-      for (const r of this.race.runners) if (r.alive || r.status === 'won') { fit(r.b.x, r.b.y, r.b.z); fit(r.b.x, r.b.y + 2.2, r.b.z); }
+      for (const r of this.race.runners) {
+        if (r.alive || r.status === 'won' || r.status === 'ready') { fit(r.b.x, r.b.y, r.b.z); fit(r.b.x, r.b.y + 2.2, r.b.z); }
+      }
       // and, once the edge is close, a stretch of the ground falling away behind it
       if (near) { fit(-3, 0, C.z + 3); fit(3, 0, C.z + 3); fit(0, -4, C.z + 10); }
       dist = clamp(dist * clamp(m / FILL, 0.8, 1.6), 12, 70);
