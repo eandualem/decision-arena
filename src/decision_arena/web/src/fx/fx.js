@@ -101,16 +101,17 @@ export class FX {
     on(EV.LAND, (p) => this.burst('land', p, { hard: p.hard, onTrain: p.onTrain }));
     on(EV.ROLL, (p) => { if (!p.airborne) this.burst('roll', p, { onTrain: this._info().onTrain }); });
     on(EV.LANE, (p) => {
-      const i = this._info();
-      if (i.grounded && !i.jetpack && !i.hoverboard && !i.headstart) this.burst('lane', this._player(), { dir: Math.sign((p.to ?? 0) - (p.from ?? 0)), onTrain: i.onTrain });
+      const i = this._info(), r = this._runner(p);
+      const grounded = r ? r.b.grounded && !r.player.flight : i.grounded && !i.jetpack && !i.hoverboard && !i.headstart;
+      if (grounded) this.burst('lane', this._player(p), { dir: Math.sign((p.to ?? 0) - (p.from ?? 0)), onTrain: r ? r.b.y >= 2.8 : i.onTrain });
     });
     on(EV.STUMBLE, (p) => this.burst('stumble', p, { side: p.side }));
     on(EV.CRASH, (p) => this.burst('crash', p));
     on(EV.CAUGHT, (p) => this.burst('caught', p.x != null ? p : this._player()));
     on(EV.PICKUP, (p) => this._pickup(p));
-    on(EV.POWERUP_START, ({ type }) => {
-      if (type === 'jetpack') this.burst('jetIgnite', this._player());
-      else if (type === 'pogo') this.burst('pogo', this._player());
+    on(EV.POWERUP_START, (p) => {
+      if (p.type === 'jetpack') this.burst('jetIgnite', this._player(p));
+      else if (p.type === 'pogo') this.burst('pogo', this._player(p));
     });
     on(EV.HOVERBOARD_START, () => this.burst('hoverOn', this._player()));
     on(EV.HOVERBOARD_BREAK, (p) => this.burst('hoverBreak', p.x != null ? p : this._player()));
@@ -126,7 +127,13 @@ export class FX {
     this.reduceMotion = !!s.reduceMotion;
   }
   _info() { return this.ctx.game?.info || {}; }
-  _player() { const i = this._info(); return { x: i.playerX || 0, y: i.playerY || 0, z: i.playerZ || 0 }; }
+  // Decision Arena: an event from one runner of several carries its index; place the effect at that runner.
+  _runner(p) { return p && p.runner != null ? this.ctx.game?.runners?.[p.runner] || null : null; }
+  _player(p) {
+    const r = this._runner(p);
+    if (r) return { x: r.b.x, y: r.b.y, z: r.b.z };
+    const i = this._info(); return { x: i.playerX || 0, y: i.playerY || 0, z: i.playerZ || 0 };
+  }
   _live() { const s = this._info().state; return s === 'running' || s === 'intro'; }
   _n(n) { return Math.max(1, Math.round(n * this.q)); }
   _rate(key, perSec, dt) {

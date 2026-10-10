@@ -35,15 +35,15 @@ export class PackCamera {
     const rs = this.race.runners;
     const alive = rs.filter((r) => r.alive || r.status === 'won');
     const list = alive.length ? alive : rs;
-    let lead = Infinity, rear = -Infinity, sx = 0, sy = 0, top = 0;
+    let lead = Infinity, rear = -Infinity, sx = 0, sy = 0, top = 0, bottom = Infinity;
     for (const r of list) {
       const b = r.b;
       lead = Math.min(lead, b.z); rear = Math.max(rear, b.z);
       sx += b.x; sy += r.player.flight ? Math.min(b.y, 4) : b.y;
-      top = Math.max(top, b.y);
+      top = Math.max(top, b.y); bottom = Math.min(bottom, b.y);
     }
     const n = Math.max(1, list.length);
-    return { lead, rear, x: sx / n, y: sy / n, top };
+    return { lead, rear, x: sx / n, y: sy / n, top, bottom };
   }
 
   _gridPose(out) {
@@ -65,11 +65,12 @@ export class PackCamera {
     this.rearZ = damp(this.rearZ, p.rear, 8, raw);
     this.leadZ = damp(this.leadZ, p.lead, 8, raw);
     this.spread = damp(this.spread, clamp(p.rear - p.lead, 0, 30), 2, raw);
-    // rise with a runner high above the pack (a jetpack, a pogo bounce) so it stays in the frame
-    this.rise = damp(this.rise || 0, Math.max(0, p.top - this.fy - 1.5), 3, raw);
+    // a runner high above the rest (a jetpack, a pogo bounce): pull back and aim between the lowest and the
+    // highest runner, so both stay in the frame
+    this.rise = damp(this.rise || 0, Math.max(0, p.top - p.bottom - 1.5), 3, raw);
     const s = this.spread, up = this.rise, nw = this._narrow();
-    out.pos.set(clamp(this.fx, -3.6, 3.6), this.fy + 4.6 + s * 0.08 + up * 0.7 + nw * 1.2, this.rearZ + 7.5 + s * 0.15 + up * 0.4 + nw * 2.2);
-    out.look.set(this.fx * 0.6, this.fy + 1.1 + up * 0.55, this.leadZ - 10);
+    out.pos.set(clamp(this.fx, -3.6, 3.6), this.fy + 4.6 + s * 0.08 + up * 0.45 + nw * 1.2, this.rearZ + 7.5 + s * 0.15 + up * 1.1 + nw * 2.2);
+    out.look.set(this.fx * 0.6, this.fy + 1.1 + up * 0.3, this.leadZ - 10);
     out.fov = 62 + Math.min(10, s * 0.35);
   }
 
