@@ -221,14 +221,22 @@ export class PackCamera {
   _clearView(out, subjects) {
     const zs = subjects.map((r) => r.b.z).concat(out.pos.z);
     const cols = this.ctx.level.getColliders(Math.min(...zs) - 1, Math.max(...zs) + 1, this._cols);
-    for (let pass = 0; pass < 3; pass++) {
+    for (let pass = 0; pass < 6 && out.pos.y < CEILING; pass++) {
       let top = -Infinity;
       for (const r of subjects) {
         const q = this._q.set(r.b.x, r.b.y + 1, r.b.z);
         for (const c of cols) if (c.kind !== 'ramp' && blocks(c, out.pos, q)) top = Math.max(top, c.maxY);
       }
       if (top === -Infinity) return;
-      out.pos.y = Math.max(out.pos.y, top + 2.2);   // over the roof, then check again
+      out.pos.y = Math.max(out.pos.y + 1.5, top + 2.2);   // rise, then check again
+    }
+  }
+
+  /** Never inside an obstacle, also part-way through a transition. */
+  _outside(p) {
+    for (const c of this.ctx.level.getColliders(p.z - 1, p.z + 1, this._cols)) {
+      if (c.kind === 'ramp') continue;
+      if (p.x > c.minX - 0.3 && p.x < c.maxX + 0.3 && p.y > c.minY - 0.3 && p.y < c.maxY + 0.3 && p.z > c.minZ - 0.3 && p.z < c.maxZ + 0.3) p.y = c.maxY + 0.6;
     }
   }
 
@@ -254,6 +262,7 @@ export class PackCamera {
       const k = 1 - Math.exp(-5 * raw);
       this.pos.lerp(T.pos, k); this.look.lerp(T.look, k); this.fov += (T.fov - this.fov) * k;
     } else { this.pos.copy(T.pos); this.look.copy(T.look); this.fov = T.fov; }
+    if (this.mode === 'follow') this._outside(this.pos);
     this.pos.y = Math.min(this.pos.y, CEILING);   // also mid-transition: never up into a bridge
 
     this.clock += raw;
