@@ -18,11 +18,11 @@ export class Bot {
 
   think(dt) {
     this.t += dt;
-    const planned = this.pilot.think(dt, NONE);
-    if (!this.lag) return planned;
-    for (const a of planned) this.queue.push({ a, at: this.t + this.lag });
+    if (!this.lag) return this.pilot.think(dt, NONE);
     const out = this.out;
     out.length = 0;
+    // One decision at a time: plan again only once the last one has been made.
+    if (!this.queue.length) for (const a of this.pilot.think(dt, NONE)) this.queue.push({ a, at: this.t + this.lag });
     while (this.queue.length && this.queue[0].at <= this.t) out.push(this.queue.shift().a);
     return out;
   }

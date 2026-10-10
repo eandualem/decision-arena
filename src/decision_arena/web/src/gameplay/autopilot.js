@@ -206,7 +206,9 @@ export class Autopilot {
       const near = c.maxZ + (c.vz ? c.vz * t : 0);
       const gap = zf - near;
       if (gap < -0.3) continue;
-      const tc = gap / (b.speed + (c.vz || 0));
+      const closing = b.speed + (c.vz || 0);
+      if (closing <= 0.1) continue;   // Decision Arena: a runner pulling away is never reached
+      const tc = gap / closing;
       if (tc < bestT) { bestT = tc; best = c; }
     }
     if (!best) return null;

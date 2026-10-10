@@ -22,7 +22,12 @@ export class PackCamera {
     this._look = new THREE.Vector3();
   }
 
-  toGrid() { this.mode = 'grid'; this.blendDur = 0; this._snap = true; }
+  toGrid() {
+    this.mode = 'grid'; this.blendDur = 0;
+    // settle on the grid now, so a transition started before the next frame starts from here
+    this._gridPose(this._t);
+    this.pos.copy(this._t.pos); this.look.copy(this._t.look); this.fov = this._t.fov;
+  }
   toFollow(blend = 1.2) {
     this.from.pos.copy(this.pos); this.from.look.copy(this.look); this.from.fov = this.fov;
     this.blendT = 0; this.blendDur = blend;
@@ -80,8 +85,7 @@ export class PackCamera {
   update(raw) {
     const T = this._t;
     if (this.mode === 'grid') this._gridPose(T); else this._followPose(raw, T);
-    if (this._snap) { this.pos.copy(T.pos); this.look.copy(T.look); this.fov = T.fov; this._snap = false; }
-    else if (this.blendT < this.blendDur) {
+    if (this.blendT < this.blendDur) {
       this.blendT += raw;
       const w = easeInOut(clamp(this.blendT / this.blendDur));
       // swing up and over the grid on the way round
