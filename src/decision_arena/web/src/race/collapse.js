@@ -244,6 +244,9 @@ class Pool {
   clear() { this.items.length = 0; this.mesh.count = 0; }
 }
 
+/** Where an obstacle loses its balance: once a third of a train, or half of anything else, hangs over the edge. */
+const balance = (r) => r.col.maxZ - (r.col.maxZ - r.col.minZ) * (r.kind === 'train' ? 0.35 : 0.5);
+
 // ------------------------------------------------------------------ the collapse
 export class Collapse {
   constructor(ctx) {
@@ -296,7 +299,10 @@ export class Collapse {
 
     // slabs of track, and rubble
     const A = env.atlas;
-    this.slabs = [laneSlab(A, 0), laneSlab(A, 0.5), shoulderSlab(A)].map((g) => new Pool(scene, g, this.mats.o, SLABS));
+    // (never cut: they fall in the chasm, the rail yard's beyond the camera's cut too)
+    const slabMat = env.mats.o.clone();
+    slabMat.clippingPlanes = null;
+    this.slabs = [laneSlab(A, 0), laneSlab(A, 0.5), shoulderSlab(A)].map((g) => new Pool(scene, g, slabMat, SLABS));
     this.rocks = new Pool(scene, rock(), new THREE.MeshLambertMaterial({ flatShading: true }), ROCKS, true);
 
     // dust: its own pool, so the race's own effects never run short
@@ -399,11 +405,12 @@ export class Collapse {
     }
     // rubble and dust, a row every 0.6 m, so the amount is the same at any frame rate
     for (; this.rubbleZ > edge; this.rubbleZ -= 0.6) this._row(this.rubbleZ);
-    // trains, ramps and barriers the edge has reached are the collapse's now
+    // trains, ramps and barriers go over once enough of them hangs over the edge; until then they stand, and
+    // runners can still run on them and into them
     const level = this.ctx.level;
     for (let i = level.recs.length - 1; i >= 0; i--) {
       const r = level.recs[i];
-      if (r.col.maxZ > edge) this._takeObstacle(r);
+      if (balance(r) > edge) this._takeObstacle(r);
     }
     // and buildings the edge is about to cut into
     for (const c of this.ctx.env.chunks.active.values()) {
@@ -489,8 +496,7 @@ export class Collapse {
         handle.beam = null;
       }
     } else take(vis.props, handle);
-    // it goes over once a third of it hangs over the edge
-    const x = (c.minX + c.maxX) / 2, zb = c.maxZ - (c.maxZ - c.minZ) * (train ? 0.35 : 0.5);
+    const x = (c.minX + c.maxX) / 2, zb = balance(r);
     this.bodies.push({
       kind: train ? 'train' : 'prop', handle, parts, glows,
       pivot0: new THREE.Vector3(x, 0, zb), P: new THREE.Vector3(x, 0, zb),

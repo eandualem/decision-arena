@@ -158,7 +158,7 @@ export class PackCamera {
     const C = this.race.collapse;
     const near = C.z - p.rear < 26;
     const rear = near ? Math.max(p.rear, C.z + 4) : p.rear;
-    if (this._reset) { this.cz = (p.lead + rear) / 2; this.dist = NEAR; this.my = p.y; this.lx = -3; }
+    if (this._reset) { this.cz = (p.lead + rear) / 2; this.dist = NEAR; this.my = p.y; this.lx = -3; this.fovFit = undefined; }
     const w = this.race.state === 'gameover' && this.race.winner;
     this.cz = damp(this.cz, w ? w.b.z : (p.lead + rear) / 2, 4, raw);
     this.my = damp(this.my, (p.bottom + p.top) / 2, 3, raw);
@@ -167,16 +167,17 @@ export class PackCamera {
     this.lx = damp(this.lx ?? -3, w ? w.b.x - 0.5 : -3, 2, raw);
     out.look.set(this.lx, this.my + 1, this.cz - (w ? 4 : 1));   // the winner below the title
     // step back until every runner's feet and head, and the edge when it is close, fit on screen
-    const F = this._fit;
+    const F = this._fit, fov = Math.min(80, 50 + this._narrow() * 6);   // a little wider on a narrow screen
     F.aspect = this.cam.aspect || 1.6;
-    F.fov = 50;
+    F.fov = fov;
     F.updateProjectionMatrix();
+    let m = 0.01;
     let dist = this.dist;
     for (let k = 0; k < 4; k++) {
       F.position.copy(out.look).addScaledVector(this._off, dist);
       F.lookAt(out.look);
       F.updateMatrixWorld();
-      let m = 0.01;
+      m = 0.01;
       const fit = (x, y, z) => { const v = this._v.set(x, y, z).project(F); if (v.z < 1) m = Math.max(m, Math.abs(v.x), Math.abs(v.y)); else m = 9; };
       for (const r of this._alive()) { fit(r.b.x, r.b.y, r.b.z); fit(r.b.x, r.b.y + 2.2, r.b.z); }
       // and, once the edge is close, the ground breaking away just behind it
@@ -186,7 +187,10 @@ export class PackCamera {
     // widen at once, tighten gently
     this.dist = dist > this.dist ? dist : damp(this.dist, dist, 1.2, raw);
     out.pos.copy(out.look).addScaledVector(this._off, this.dist);
-    out.fov = 50;
+    // when even the furthest distance cannot fit the pack (a tall, narrow screen), widen the view instead
+    const need = dist >= FAR && m > FILL ? 2 * Math.atan(Math.tan((fov * Math.PI) / 360) * (m / FILL)) * (180 / Math.PI) : fov;
+    this.fovFit = damp(this.fovFit ?? need, need, 3, raw);
+    out.fov = Math.min(95, this.fovFit);
   }
 
   /** Cut away the near side for the angled view; restore the full world otherwise. */
@@ -216,7 +220,7 @@ export class PackCamera {
     else if (this.view === 'chase') this._chasePose(raw, T);
     else this._anglePose(raw, T);
     this._reset = false;
-    if (this.mode !== 'grid') T.fov = Math.min(80, T.fov + this._narrow() * 6);
+    if (this.mode === 'follow' && this.view === 'chase') T.fov = Math.min(80, T.fov + this._narrow() * 6);
     if (this.blendT < this.blendDur) {
       this.blendT += raw;
       const w = easeInOut(clamp(this.blendT / this.blendDur));
