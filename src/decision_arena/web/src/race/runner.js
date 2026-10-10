@@ -36,7 +36,7 @@ export class Runner {
     this.controller = null;
     this.lean = 0;
     this._box = { minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0 };
-    this._collect = { magnet: false, dt: 0, speed: 0 };
+    this._collect = { magnet: false, dt: 0, speed: 0, owner: seat.index };
     this._rs = { mode: 'menu', speed: 0, grounded: true, vy: 0, rolling: false, lean: 0, flying: false, pogo: false, board: false, sneakers: false, magnet: false, blink: false, screen: 'race' };
     this._propKey = -1;
     this.reset(0, 0);
@@ -56,6 +56,7 @@ export class Runner {
     this.downT = 0;
     this.crashes = 0;
     this.bumpT = -9;
+    this.bounceT = -9;
     this.speed = 0;
     this.streak = 0;
     this.dip = 0;

@@ -99,9 +99,11 @@ export class CoinField {
         const dx = c.x - cx, dz = c.z - cz, dy = c.y - cy;
         if (dz > -R && dz < 3 && dx * dx + dz * dz < R * R && dy > -4 && dy < 4.5) {
           c.homing = true; c.tau = 0; c.sx = c.x; c.sy = c.y; c.sz = c.z; c.side = dx >= 0 ? 1 : -1;
+          c.owner = opts.owner;   // Decision Arena: only the runner whose magnet pulled it moves and takes it
         }
       }
       if (c.homing) {
+        if (c.owner !== undefined && opts && opts.owner !== c.owner) continue;
         c.tau += dt;
         const t = Math.min(1, c.tau / HOME_T);
         const h = t * t * (1.6 - 0.6 * t);                // accelerating ease

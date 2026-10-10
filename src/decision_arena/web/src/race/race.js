@@ -131,6 +131,7 @@ export class Race {
     if (dt <= 0) return;
     this.t += dt;
     this.base = SPEED.start + (SPEED.max - SPEED.start) * (1 - Math.exp(-this.t / RACE.rampSeconds));
+    for (const r of this.runners) r.prevX = r.b.x;
     for (const r of this.runners) r.update(dt, this.base);
     this._contacts();
     this._updateSweeper(dt);
@@ -151,13 +152,20 @@ export class Race {
         const b = list[j];
         if (!b.active || b.player.flight || b.player.invulnT > 0) continue;
         const A = a.b, B = b.b;
-        if (Math.abs(A.x - B.x) >= 2 * HW + 0.06) continue;
+        // Two runners that swapped sides within one step crossed paths, however far apart they ended up.
+        const crossed = Math.sign(a.prevX - b.prevX) * Math.sign(A.x - B.x) < 0;
+        if (Math.abs(A.x - B.x) >= 2 * HW + 0.06 && !crossed) continue;
         const ha = A.rollT > 0 ? PLAYER.rollHeight : PLAYER.height;
         const hb = B.rollT > 0 ? PLAYER.rollHeight : PLAYER.height;
         if (A.y >= B.y + hb - 0.15 || B.y >= A.y + ha - 0.15) continue;
         const dz = B.z - A.z;
         if (Math.abs(dz) >= 2 * HD + 0.1) continue;
         const mover = A.laneT < 1 ? a : B.laneT < 1 ? b : null;
+        if (crossed) {
+          if (A.laneT < 1) this._bounce(a);
+          if (B.laneT < 1) this._bounce(b);
+          continue;
+        }
         if (mover && Math.abs(dz) < 0.45) { this._bounce(mover); continue; }
         const rear = dz > 0 ? b : a, front = rear === a ? b : a;
         rear.b.z = front.b.z + 2 * HD + 0.12;
@@ -169,6 +177,8 @@ export class Race {
   }
 
   _bounce(r) {
+    if (this.t - r.bounceT < RACE.bumpCooldown) return;   // bounced back already: let it get home
+    r.bounceT = this.t;
     const b = r.b;
     const back = b.fromLane;
     b.fromLane = b.lane; b.lane = back; b.laneX0 = b.x; b.laneT = 0; b.laneDur = PHYS.laneSwitchTime * 1.3;
