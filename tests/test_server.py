@@ -29,11 +29,18 @@ def test_page_starts_a_series_and_receives_frames():
 def test_a_page_that_stops_reading_drops_out_without_blocking():
     arena = Arena([Greedy(0), Greedy(1)], Settings())
 
+    closed = []
+
+    class Page:
+        async def close(self, code):
+            closed.append(code)
+
     async def go():
-        stuck = asyncio.Queue(maxsize=1)
-        arena.pages["stuck"] = stuck
+        arena.pages[Page()] = asyncio.Queue(maxsize=1)
         await arena.send({"type": "frame"})
         await asyncio.wait_for(arena.send({"type": "frame"}), 0.1)
+        await asyncio.sleep(0)  # let the background close run
 
     asyncio.run(go())
     assert arena.pages == {}
+    assert closed == [1013]

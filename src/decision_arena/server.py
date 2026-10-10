@@ -32,6 +32,7 @@ class Arena:
         # the game clock; one that falls this far behind stops receiving.
         self.pages: dict[WebSocket, asyncio.Queue[str]] = {}
         self.running: asyncio.Task[Any] | None = None
+        self._closing: set[asyncio.Task[Any]] = set()
 
     def start(self) -> None:
         if self.running is None or self.running.done():
@@ -43,7 +44,16 @@ class Arena:
             try:
                 outbox.put_nowait(text)
             except asyncio.QueueFull:
+                # Closed in the background, so the page says it is disconnected.
                 self.pages.pop(page, None)
+                closing = asyncio.create_task(_close(page))
+                self._closing.add(closing)
+                closing.add_done_callback(self._closing.discard)
+
+
+async def _close(page: WebSocket) -> None:
+    with contextlib.suppress(Exception):
+        await page.close(code=1013)  # try again later
 
 
 async def _deliver(page: WebSocket, outbox: asyncio.Queue[str]) -> None:
