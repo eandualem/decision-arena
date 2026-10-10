@@ -39,24 +39,27 @@ watch and practical for only two to four players.
 - **Crashes.** A crash knocks a runner down for 0.7 s. It then gets up and
   runs through obstacles for 2 s while it gets going again. A crash costs
   ground rather than ending the race.
-- **The chaser.** A runaway locomotive as wide as the track follows the
-  pack, smashing through any obstacle it reaches. It is at most 30 m behind
-  the leader at the start, closing to 6 m. Whoever it reaches is knocked off
-  the track and out, so a crash early in the race can be survived and a
-  crash late in it cannot. The last runner left wins.
-- **The camera.** A broadcast view from the right of the track pans with the
-  pack, so every runner is side by side on screen and you can see who falls
-  behind and the train closing in. The near side of the scenery is cut away
-  at the edge of the track, like a diorama. **C** switches to a view from
-  behind.
+- **The collapse.** The ground falls away behind the pack: everything
+  behind the edge, track, trains, buildings and runners, breaks up and drops
+  into the dark. The edge is at most 30 m behind the leader at the start,
+  closing to 6 m. A runner it reaches falls and is out, so a crash early in
+  the race can be survived and a crash late in it cannot. The last runner
+  left wins.
+- **The camera.** It looks forward along the track from 45 degrees behind
+  and to the right, so you see the runners and what is coming at them, and
+  steps back just enough to fit every runner and the edge when it is close.
+  The near side of the scenery is cut away at the edge of the track, so the
+  track runs along a cliff. **C** switches to a view from behind.
 
 **Why.** Every rule creates contact between runners: overtakes, blocks,
 comebacks and a pressure that rises over the race.
 
 **Rejected.** Ending a runner's race on its first crash, as Rail Dash does.
 In simulated races most runners went out within seconds, and the sweeper
-never mattered. A low sweeping machine as the chaser, and a camera behind
-the pack: the maintainer found both hard to read.
+never mattered. A chaser on the track (a sweeping machine, then a runaway
+train): it had to pass through the trains on the track. A camera straight
+behind the pack, or straight from the side: one hid who was falling behind,
+the other hid the obstacles ahead.
 
 ## 3. How a model decides: no ticks
 

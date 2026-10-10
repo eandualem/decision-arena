@@ -6,7 +6,6 @@ import { getModel } from './model.js';
 import { PlayerRig } from './player.js';
 import { initEnvironment } from './materials.js';
 import { BoardRig } from './boards.js';
-import { ChaserRig } from './chaser.js';
 
 /** World-space bounds of the visible meshes only (hidden props such as the jetpack or pogo stick are skipped). */
 function visibleBox(root, box, tmp) {
@@ -40,7 +39,6 @@ export class Characters {
   createBoard(boardId) {
     return new BoardRig(boardId, { castShadow: this.ctx.quality !== 'low' });
   }
-  createChaser() { return new ChaserRig({ castShadow: this.ctx.quality !== 'low' }); }
 
   /**
    * Portrait of a character (full body, idle pose, 3/4 view) or a hoverboard, as a transparent PNG data URL.

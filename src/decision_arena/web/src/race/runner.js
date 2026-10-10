@@ -70,7 +70,7 @@ export class Runner {
     this.rig.object.position.set(this.b.x, this.b.y, this.b.z);
     this.rig.object.rotation.set(0, 0, 0);
     this.rig.object.visible = true;
-    this.fly = null;
+    this.fall = null;
     this.controller?.reset?.();
     this._updateProps();
   }
@@ -162,7 +162,7 @@ export class Runner {
     this.race.onStumble(this);
   }
 
-  /** A crash knocks the runner down; it gets up again, losing ground the sweeper may make up. */
+  /** A crash knocks the runner down; it gets up again, losing ground the collapse may make up. */
   crash(hit) {
     if (!this.active) return;
     const b = this.b;
@@ -193,15 +193,14 @@ export class Runner {
     this.rig.trigger?.('revive');
   }
 
-  /** Hit by the train: knocked flying off the track. */
+  /** The ground went out from under it: it stops where it is and falls with the ground (the world shader
+   *  drops everything behind the edge, runners included). */
   caught() {
     if (!this.alive) return;
     const b = this.b;
-    // away from the side camera, toward the far side of the track, so the knock-out stays in view
-    const side = -1;
-    this.fly = { t: 0, vx: side * (5 + Math.random() * 2), vy: 11 + Math.random() * 3, vz: -6, spin: side * (7 + Math.random() * 4) };
+    this.fall = { t: 0 };
     this.player.flight = null;
-    this.player.blinkT = 0; this.player.invulnT = 0;   // a crash's blinking ends: the fly-off must be seen
+    this.player.blinkT = 0; this.player.invulnT = 0;   // a crash's blinking ends: the fall must be seen
     this._rs.blink = false;
     this.rig.object.visible = true;
     this.ctx.events.emit(EV.CAUGHT, { x: b.x, y: b.y, z: b.z, runner: this.index });
@@ -289,7 +288,7 @@ export class Runner {
     const P = this.player, b = P.b;
     const out = this.status === 'down' || this.status === 'caught';
     const adt = out || mode === 'menu' ? raw : dt;
-    if (this.fly) { this._flyOff(raw); return; }
+    if (this.fall) { this._falling(raw); return; }
     this._updateProps();
     this.rig.object.position.set(b.x, b.y, b.z);
     this.lean = damp(this.lean, clamp(b.vx / 28, -1, 1), 16, adt);
@@ -308,15 +307,11 @@ export class Runner {
     this.rig.update(adt, s);
   }
 
-  _flyOff(raw) {
-    const f = this.fly, b = this.b, o = this.rig.object;
-    if (f.t > 1.4) { o.visible = false; return; }
+  _falling(raw) {
+    const f = this.fall, o = this.rig.object;
+    if (f.t > 3) { o.visible = false; return; }   // long gone below
     f.t += raw;
-    b.x += f.vx * raw; b.y = Math.max(0, b.y + f.vy * raw); b.z += f.vz * raw;
-    f.vy -= 30 * raw;
-    o.position.set(b.x, b.y, b.z);
-    o.rotation.z += f.spin * raw;
-    o.rotation.x += f.spin * 0.4 * raw;
+    o.position.set(this.b.x, this.b.y, this.b.z);
     this._rs.mode = 'dead';
     this.rig.update(raw, this._rs);
   }
