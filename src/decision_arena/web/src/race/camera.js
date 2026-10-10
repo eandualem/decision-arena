@@ -133,8 +133,9 @@ export class PackCamera {
     const halfW = Math.max(s / 2, Math.abs(p.lead - this.cz), Math.abs(rear - this.cz)) + 4;
     const half = Math.min(0.5, Math.atan(Math.tan(32 * Math.PI / 180) * aspect));   // widest half-angle at a 64 degree cap
     // and high enough for the lowest feet and the highest head (a jetpack, a pogo bounce)
-    this.bot = damp(this.bot ?? p.bottom, p.bottom, 3, raw);
-    this.top = damp(this.top ?? p.top, p.top, 3, raw);
+    // grow at once (a runner shooting up on a jetpack), shrink smoothly
+    this.bot = Math.min(p.bottom, damp(this.bot ?? p.bottom, p.bottom, 3, raw));
+    this.top = Math.max(p.top, damp(this.top ?? p.top, p.top, 3, raw));
     const halfV = (this.top + 2 - this.bot) / 2 + 1.5;
     const dist = Math.max(13, halfW / Math.tan(half), halfV / Math.tan(25 * Math.PI / 180));
     const mid = (this.bot + this.top + 2) / 2;
@@ -178,7 +179,8 @@ export class PackCamera {
     } else { this.pos.copy(T.pos); this.look.copy(T.look); this.fov = T.fov; }
 
     // cut away the near side from the moment the camera heads out to its side position
-    this._cutaway(this.mode === 'follow' && this.view === 'side');
+    // ...until it is back inside the corridor, also on the way back to the view from behind
+    this._cutaway((this.mode === 'follow' && this.view === 'side') || this.pos.x > EDGE - 0.3);
     // from behind, the camera can be where the train is: don't draw the train then, so the runners stay in view
     this.insideTrain = this.mode === 'follow' && this.view === 'chase' && this.pos.z > this.race.sweeper.z - 3;
 
