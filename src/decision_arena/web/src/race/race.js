@@ -253,8 +253,8 @@ export class Race {
   // ------------------------------------------------------------------ what the other systems read
   _refreshInfo() {
     const I = this.info;
-    const alive = this.runners.filter((r) => r.alive);
-    const pack = alive.length ? alive : this.runners;
+    const inRace = this.runners.filter((r) => r.alive || r.status === 'won');
+    const pack = inRace.length ? inRace : this.runners;
     const lead = this.order[0] || this.runners[0];
     let front = Infinity, rear = -Infinity;
     for (const r of pack) { front = Math.min(front, r.b.z); rear = Math.max(rear, r.b.z); }
@@ -264,7 +264,8 @@ export class Race {
     I.playerX = b.x; I.playerY = b.y;
     I.playerZ = Number.isFinite(front) ? (front + rear) / 2 : 0;   // the world streams around the middle of the pack
     I.lane = b.lane; I.targetLane = b.lane;
-    I.speed = this.state === 'running' && lead ? lead.speed : 0;
+    // The world's pace (moving trains, spawning) follows the fastest runner, never one that is down.
+    I.speed = this.state === 'running' ? Math.max(this.base, ...this.runners.map((r) => (r.active ? r.speed : 0))) : 0;
     I.distance = -I.playerZ;
     I.grounded = b.grounded; I.rolling = b.rollT > 0; I.vy = b.vy;
     I.onTrain = false;

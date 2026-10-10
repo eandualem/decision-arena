@@ -48,8 +48,8 @@ export class PackCamera {
 
   _gridPose(out) {
     const p = this._pack();
-    // in front of the grid, low, looking back at the runners' faces
-    out.pos.set(1.2, 1.9, p.lead - 7.5);
+    // in front of the grid, low, looking back at the runners' faces; further back on a narrow screen
+    out.pos.set(1.2, 1.9, p.lead - 7.5 - this._narrow() * 2.6);
     out.look.set(0, 1.0, (p.lead + p.rear) / 2 + 0.5);
     out.fov = 58;
   }
@@ -67,11 +67,14 @@ export class PackCamera {
     this.spread = damp(this.spread, clamp(p.rear - p.lead, 0, 30), 2, raw);
     // rise with a runner high above the pack (a jetpack, a pogo bounce) so it stays in the frame
     this.rise = damp(this.rise || 0, Math.max(0, p.top - this.fy - 1.5), 3, raw);
-    const s = this.spread, up = this.rise;
-    out.pos.set(clamp(this.fx, -3.6, 3.6), this.fy + 4.6 + s * 0.08 + up * 0.7, this.rearZ + 7.5 + s * 0.15 + up * 0.4);
+    const s = this.spread, up = this.rise, nw = this._narrow();
+    out.pos.set(clamp(this.fx, -3.6, 3.6), this.fy + 4.6 + s * 0.08 + up * 0.7 + nw * 1.2, this.rearZ + 7.5 + s * 0.15 + up * 0.4 + nw * 2.2);
     out.look.set(this.fx * 0.6, this.fy + 1.1 + up * 0.55, this.leadZ - 10);
     out.fov = 62 + Math.min(10, s * 0.35);
   }
+
+  /** How much narrower than a 16:10 screen this one is (0 on wide screens), so all three lanes stay in view. */
+  _narrow() { return Math.max(0, 1.6 / (this.cam.aspect || 1.6) - 1); }
 
   update(raw) {
     const T = this._t;
