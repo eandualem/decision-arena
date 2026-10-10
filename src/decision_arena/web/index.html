@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Decision Arena</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #140c2e; }
+  body { -webkit-user-select: none; user-select: none; }
+  #game { position: fixed; inset: 0; }
+  #game canvas { display: block; width: 100%; height: 100%; }
+</style>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}</script>
+</head>
+<body>
+<div id="game"></div>
+<script type="module" src="./src/race/main.js"></script>
+</body>
+</html>

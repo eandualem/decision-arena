@@ -1,0 +1,263 @@
+// The race (stands in for Rail Dash's single-player Game as ctx.game): a start grid, a shared base speed,
+// runners bumping and passing each other, the sweeper closing in from behind, places and the finish.
+// Other systems read `info` (world streaming, effects, audio) and `rig` (effects anchors): both follow the pack.
+import { EV } from '../core/events.js';
+import { SPEED, PHYS, PLAYER } from '../config.js';
+import { HW, HD } from '../gameplay/physics.js';
+import { Runner } from './runner.js';
+import { PackCamera } from './camera.js';
+
+export const RACE = {
+  rampSeconds: 110,     // base speed rises from SPEED.start toward SPEED.max on this time scale
+  startGap: 30,         // the sweeper may be at most this far behind the leader at the start...
+  minGap: 6,            // ...shrinking to this...
+  closeRate: 0.12,      // ...by this many metres per second
+  sweeperPace: 0.96,    // the sweeper's own speed, as a fraction of the base speed
+  reach: 1.7,           // the sweeper catches a runner this far in front of its centre
+  gridRow: 3.6,         // metres between grid rows
+  countdown: 0.8,       // seconds per 3-2-1 step
+  bumpCooldown: 0.5,    // seconds after a bump before the same runner can bump again
+};
+
+// Starting slots, front row first; the middle lane leads each row.
+const SLOTS = [[0, 0], [-1, 0], [1, 0], [0, 1], [-1, 1], [1, 1]];
+
+export class Race {
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.state = 'boot';
+    this.info = {
+      state: 'boot', time: 0, playerX: 0, playerY: 0, playerZ: 0, lane: 0, targetLane: 0, speed: 0, distance: 0,
+      grounded: true, rolling: false, onTrain: false, vy: 0,
+      jetpack: false, pogo: false, headstart: false, magnet: false, sneakers: false, multiplier: false, hoverboard: false, invulnerable: false,
+      chaserZ: 30, chaserVisible: false,
+    };
+    this.runners = [];
+    this.order = [];
+    this.rig = null;
+    this.races = 0;
+    this.t = 0;
+    this.base = 0;
+    this.winner = null;
+    this.countdown = { n: 0, t: 0 };
+    this.sweeper = { z: 30, speed: 0, rig: null, s: { mode: 'idle', speed: 0 } };
+    this.camera = new PackCamera(ctx, this);
+    this._cols = [];
+  }
+
+  start() {
+    this.sweeper.rig = this.ctx.characters.createChaser();
+    this.ctx.scene.add(this.sweeper.rig.object);
+  }
+
+  frameInfo() { return this.info; }
+  isFrozen() { return false; }
+
+  _set(s) {
+    const prev = this.state;
+    if (prev === s) return;
+    this.state = s;
+    this.info.state = s;
+    this.ctx.events.emit(EV.STATE, { state: s, prev });
+  }
+
+  /** seats: [{name, color, character, outfit, controller(runner) -> {think(dt), reset()}}] */
+  setup(seats) {
+    for (const r of this.runners) r.dispose();
+    this.runners = seats.map((seat, index) => {
+      const r = new Runner(this, { ...seat, index });
+      r.controller = seat.controller(r);
+      return r;
+    });
+    this.toGrid();
+  }
+
+  // ------------------------------------------------------------------ flow
+  toGrid() {
+    const ctx = this.ctx;
+    ctx.level.reset({});
+    ctx.env.reset?.();
+    // Rotate the slots each race, so over several races everyone starts from every slot.
+    const n = this.runners.length;
+    this.runners.forEach((r, i) => {
+      const [lane, row] = SLOTS[(i + this.races) % n];
+      r.reset(lane, row * RACE.gridRow);
+    });
+    this.order = this.runners.slice();
+    this._places();
+    this.t = 0;
+    this.base = 0;
+    this.winner = null;
+    const rear = Math.max(...this.runners.map((r) => r.b.z));
+    this.sweeper.z = rear + RACE.startGap - 6;
+    this.camera.toGrid();
+    this._set('menu');
+  }
+
+  go() {
+    if (this.state !== 'menu' && this.state !== 'gameover') return;
+    if (this.state === 'gameover') { this.races++; this.toGrid(); }
+    this.countdown.n = 3; this.countdown.t = 0;
+    this.camera.toFollow(RACE.countdown * 3);
+    this._set('intro');
+    this.ctx.events.emit(EV.COUNTDOWN, { n: 3 });
+  }
+
+  // ------------------------------------------------------------------ frame
+  update(dt, raw) {
+    if (this.state === 'intro') this._updateCountdown(raw);
+    else if (this.state === 'running') this._updateRace(dt);
+    const mode = this.state === 'running' ? 'run' : 'menu';
+    for (const r of this.runners) r.updateRig(dt, raw, r.alive ? mode : 'menu');
+    this._updateSweeperRig(dt, raw);
+    this.camera.update(raw);
+    this._refreshInfo();
+  }
+
+  _updateCountdown(raw) {
+    const c = this.countdown;
+    c.t += raw;
+    if (c.t < RACE.countdown) return;
+    c.t -= RACE.countdown;
+    c.n--;
+    this.ctx.events.emit(EV.COUNTDOWN, { n: Math.max(0, c.n) });
+    if (c.n > 0) return;
+    for (const r of this.runners) { r.status = 'running'; r.rig.trigger?.('start'); }
+    this._set('running');
+  }
+
+  _updateRace(dt) {
+    if (dt <= 0) return;
+    this.t += dt;
+    this.base = SPEED.start + (SPEED.max - SPEED.start) * (1 - Math.exp(-this.t / RACE.rampSeconds));
+    for (const r of this.runners) r.update(dt, this.base);
+    this._contacts();
+    this._updateSweeper(dt);
+    this._places();
+    const alive = this.runners.filter((r) => r.alive);
+    if (alive.length <= 1 && (this.runners.length > 1 || alive.length === 0)) this._finish(alive[0] || this.order[0]);
+  }
+
+  // ------------------------------------------------------------------ runners touching
+  /** Running into the back of another runner is a stumble; cutting across into one bounces you back. A runner
+   *  high enough above another (a jump, a roof) passes over it. */
+  _contacts() {
+    const list = this.runners;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      if (!a.active || a.player.flight || a.player.invulnT > 0) continue;
+      for (let j = i + 1; j < list.length; j++) {
+        const b = list[j];
+        if (!b.active || b.player.flight || b.player.invulnT > 0) continue;
+        const A = a.b, B = b.b;
+        if (Math.abs(A.x - B.x) >= 2 * HW + 0.06) continue;
+        const ha = A.rollT > 0 ? PLAYER.rollHeight : PLAYER.height;
+        const hb = B.rollT > 0 ? PLAYER.rollHeight : PLAYER.height;
+        if (A.y >= B.y + hb - 0.15 || B.y >= A.y + ha - 0.15) continue;
+        const dz = B.z - A.z;
+        if (Math.abs(dz) >= 2 * HD + 0.1) continue;
+        const mover = A.laneT < 1 ? a : B.laneT < 1 ? b : null;
+        if (mover && Math.abs(dz) < 0.45) { this._bounce(mover); continue; }
+        const rear = dz > 0 ? b : a, front = rear === a ? b : a;
+        rear.b.z = front.b.z + 2 * HD + 0.12;
+        if (this.t - (rear.bumpT ?? -9) < RACE.bumpCooldown) continue;
+        rear.bumpT = this.t;
+        rear.stumble('runner');
+      }
+    }
+  }
+
+  _bounce(r) {
+    const b = r.b;
+    const back = b.fromLane;
+    b.fromLane = b.lane; b.lane = back; b.laneX0 = b.x; b.laneT = 0; b.laneDur = PHYS.laneSwitchTime * 1.3;
+    this.camera.shake(0.12);
+  }
+
+  /** The other runners as moving obstacles, for a bot planning around them. */
+  runnerColliders(self, out) {
+    for (const r of this.runners) {
+      if (r === self || !r.alive || r.player.flight) continue;   // a runner that is down is in the way too
+      const b = r.b;
+      const c = r._col || (r._col = { id: 1e6 + r.index, kind: 'runner', lane: 0, minX: 0, maxX: 0, minY: 0, maxY: 0, minZ: 0, maxZ: 0, vz: 0, top: 'none', ramp: null, moving: true });
+      c.lane = b.lane; c.minX = b.x - HW; c.maxX = b.x + HW;
+      c.minY = b.y; c.maxY = b.y + (b.rollT > 0 ? PLAYER.rollHeight : PLAYER.height);
+      c.minZ = b.z - HD; c.maxZ = b.z + HD; c.vz = -r.speed;
+      out.push(c);
+    }
+  }
+
+  // ------------------------------------------------------------------ sweeper
+  _updateSweeper(dt) {
+    const S = this.sweeper;
+    const lead = this.order.find((r) => r.alive);
+    const ramp = Math.min(1, this.t / 1.2);
+    S.speed = this.base * RACE.sweeperPace * (0.3 + 0.7 * ramp);
+    S.z -= S.speed * dt;
+    const gap = Math.max(RACE.minGap, RACE.startGap - this.t * RACE.closeRate);
+    if (lead && S.z > lead.b.z + gap) { S.speed += (S.z - (lead.b.z + gap)) / dt; S.z = lead.b.z + gap; }
+    for (const r of this.runners) {
+      if (r.alive && r.b.z >= S.z - RACE.reach) {
+        r.caught();
+        S.rig.trigger('catch');
+        this.camera.shake(0.35);
+      }
+    }
+  }
+
+  _updateSweeperRig(dt, raw) {
+    const S = this.sweeper;
+    S.rig.object.position.set(0, 0, S.z);
+    S.rig.object.visible = S.z < 4;   // out of sight among the trains parked behind the start line
+    S.s.mode = this.state === 'running' ? 'run' : 'idle';
+    S.s.speed = S.speed;
+    S.rig.update(this.state === 'running' ? dt : raw, S.s);
+  }
+
+  // ------------------------------------------------------------------ places and the finish
+  onStumble(r) { this.camera.shake(0.15); }
+  onCrash(r) { this.camera.shake(0.45); }
+  onOut(r) { this.camera.shake(0.3); }
+
+  _places() {
+    // Running runners by distance, then the ones who are out, latest out first.
+    this.order = this.runners.slice().sort((a, b) => {
+      if (a.alive !== b.alive) return a.alive ? -1 : 1;
+      if (a.alive) return a.b.z - b.b.z;
+      return b.outAt - a.outAt || a.b.z - b.b.z;
+    });
+    this.order.forEach((r, i) => { r.place = i + 1; });
+  }
+
+  _finish(winner) {
+    this.winner = winner || null;
+    if (winner && winner.alive) {
+      winner.status = 'won';
+      winner.rig.trigger?.('celebrate');
+    }
+    this._set('gameover');
+    this.ctx.events.emit(EV.RUN_END, { winner: winner?.name, time: this.t });
+  }
+
+  // ------------------------------------------------------------------ what the other systems read
+  _refreshInfo() {
+    const I = this.info;
+    const alive = this.runners.filter((r) => r.alive);
+    const pack = alive.length ? alive : this.runners;
+    const lead = this.order[0] || this.runners[0];
+    let front = Infinity, rear = -Infinity;
+    for (const r of pack) { front = Math.min(front, r.b.z); rear = Math.max(rear, r.b.z); }
+    const b = lead ? lead.b : { x: 0, y: 0, z: 0, lane: 0, vy: 0, grounded: true, rollT: 0 };
+    I.state = this.state;
+    I.time = this.ctx.time;
+    I.playerX = b.x; I.playerY = b.y;
+    I.playerZ = Number.isFinite(front) ? (front + rear) / 2 : 0;   // the world streams around the middle of the pack
+    I.lane = b.lane; I.targetLane = b.lane;
+    I.speed = this.state === 'running' && lead ? lead.speed : 0;
+    I.distance = -I.playerZ;
+    I.grounded = b.grounded; I.rolling = b.rollT > 0; I.vy = b.vy;
+    I.onTrain = false;
+    I.chaserZ = this.sweeper.z; I.chaserVisible = true;
+    this.rig = lead ? lead.rig : null;
+  }
+}

@@ -65,6 +65,7 @@ export class Autopilot {
     this._syncCfg();
     const got = this.ctx.level.getColliders(b.z - SCAN, b.z + 8, this.cols);
     if (got && got !== this.cols) { this.cols.length = 0; for (let i = 0; i < got.length; i++) this.cols.push(got[i]); }
+    g.race?.runnerColliders?.(g, this.cols);   // Decision Arena: plan around the other runners too
     this.stratT -= dt;
     if (this.stratT <= 0) { this.stratT = 0.12; this._strategy(); }
     if (P.flight) { this.plan = null; this._flight(dt, out); return out; }

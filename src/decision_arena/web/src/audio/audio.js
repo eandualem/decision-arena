@@ -59,7 +59,7 @@ export class AudioSystem {
     on(EV.ROLL, () => this.play('roll'));
     on(EV.LAND, (p) => this.play(p.hard ? 'landHard' : 'land', { metal: !!p.onTrain }));
     on(EV.LANE, (p) => this.play('lane', { pan: clamp(((p.to ?? 0) - (p.from ?? 0)) * 0.3 + (p.to ?? 0) * 0.2, -0.7, 0.7) }));
-    on(EV.STUMBLE, () => { this.play('stumble'); this.play('whistle', { delay: 0.14 }); this._bark(0.45); });
+    on(EV.STUMBLE, () => this.play('stumble'));   // Decision Arena: no guard whistle or dog bark
     on(EV.CRASH, () => this.play('crash'));
     on(EV.CAUGHT, () => this.play('caught'));
     on(EV.REVIVE, () => { this.play('revive'); this._setDuck('none'); });
