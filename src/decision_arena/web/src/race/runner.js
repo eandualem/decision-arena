@@ -198,7 +198,7 @@ export class Runner {
   caught() {
     if (!this.alive) return;
     const b = this.b;
-    this.fall = { t: 0 };
+    this.fall = { t: 0, y0: b.y };
     this.player.flight = null;
     this.player.blinkT = 0; this.player.invulnT = 0;   // a crash's blinking ends: the fall must be seen
     this._rs.blink = false;
@@ -311,6 +311,7 @@ export class Runner {
     const f = this.fall, o = this.rig.object;
     if (f.t > 3) { o.visible = false; return; }   // long gone below
     f.t += raw;
+    this.b.y = f.y0 - 9 * f.t * f.t;   // falls on its own clock too, also once the race is over
     o.position.set(this.b.x, this.b.y, this.b.z);
     this._rs.mode = 'dead';
     this.rig.update(raw, this._rs);

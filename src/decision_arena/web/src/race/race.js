@@ -112,6 +112,7 @@ export class Race {
   update(dt, raw) {
     if (this.state === 'intro') this._updateCountdown(raw);
     else if (this.state === 'running') this._updateRace(dt);
+    else if (this.state === 'gameover') this._crumbleToWinner(dt);
     const mode = this.state === 'running' ? 'run' : 'menu';
     for (const r of this.runners) r.updateRig(dt, raw, r.alive ? mode : 'menu');
     // the ground falls away behind the edge once the race is on, and stays down until the next grid
@@ -206,6 +207,13 @@ export class Race {
       c.minZ = b.z - HD; c.maxZ = b.z + HD; c.vz = -r.speed;
       out.push(c);
     }
+  }
+
+  /** After the finish the ground keeps crumbling, up to just behind the winner. */
+  _crumbleToWinner(dt) {
+    const C = this.collapse, w = this.winner;
+    if (!w || dt <= 0) return;
+    C.z = Math.max(w.b.z + 3, C.z - Math.max(C.speed, 10) * dt);
   }
 
   // ------------------------------------------------------------------ the collapsing ground
