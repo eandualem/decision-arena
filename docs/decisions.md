@@ -182,7 +182,12 @@ starts; if any does not answer, the command stops and says which, and which
 key to check. During a race a failed or unusable answer is shown and the
 runner asks again half a second later. One key shows or hides the decision panel:
 per model its last choice, the probability of each move, its latency and
-decisions per second.
+decisions per second, and its record over the races since the page loaded.
+The record shows how often it finished first, second and third, and coins
+a minute on the track. The cards are ordered by it: most wins first, then
+most seconds, and so on. Coins count per minute, not in total, because a
+race stops when one runner is left. Models aren't told where coins are, and
+coins change nothing in the race, so coins a minute is a side measure.
 
 **Why.** Keys never reach a page, the model code is plain Python that tests
 can drive with recorded answers, and the game keeps its own clock.

@@ -1,6 +1,7 @@
 // The race overlay (plain DOM over the canvas): a name tag above each runner, the standings, the countdown,
 // the start button, the winner, and the decision panel (D shows or hides it): per model runner its last move,
-// the probability it gave each move, its latency and its decisions per second. Tags follow the curved-world bend so they stay on their runners.
+// the probability it gave each move, its latency and its decisions per second, and its record over the races since the
+// page loaded (finishes, and coins a minute on the track), the cards ordered by that record. Tags follow the curved-world bend so they stay on their runners.
 import * as THREE from 'three';
 import { EV } from '../core/events.js';
 import { FONT_CSS } from '../ui/fonts.js';
@@ -53,6 +54,9 @@ ${FONT_CSS}
 #hud .card .bar span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 #hud .card .stats { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; font-weight: 800;
   font-variant-numeric: tabular-nums; color: rgba(255,255,255,.85); }
+#hud .card .record { margin-top: 3px; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,.7); white-space: nowrap; }
+#hud .card .record:empty { display: none; }
 #hud .card .err { font-size: 11px; color: #ff9c9c; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `;
 const MOVES = ['left', 'right', 'jump', 'roll', 'keep'];
@@ -81,6 +85,7 @@ export class Hud {
     this.button.onclick = () => onStart();
     this.panel = this.root.querySelector('.panel');
     this.cards = new Map();
+    this.records = new Map();   // model name -> its record since the page loaded
     this.rows = new Map();
     this.tags = new Map();
     this._v = new THREE.Vector3();
@@ -124,12 +129,41 @@ export class Hud {
       card.style.color = r.color;
       card.innerHTML = `<div class="head"><span class="name"></span><span class="move"></span></div>
         ${MOVES.map((m) => `<div class="bar" data-m="${m}"><span>${m}</span><i><b></b></i><span></span></div>`).join('')}
-        <div class="stats"><span class="ms"></span><span class="rate"></span></div><div class="err"></div>`;
+        <div class="stats"><span class="ms"></span><span class="rate"></span></div><div class="record"></div><div class="err"></div>`;
       card.querySelector('.name').textContent = r.name;
       this.panel.appendChild(card);
       this.cards.set(r, card);
     }
     this.panel.hidden = !this.cards.size;
+  }
+
+  /** At each finish: add every model's result to its record, and order the cards by record. A race ends when one
+   *  runner is left, so coins count per minute on the track, not in total. */
+  _record() {
+    for (const r of this.cards.keys()) {
+      const rec = this.records.get(r.name) || { races: 0, places: [], coins: 0, time: 0 };
+      rec.races++;
+      rec.places[r.place - 1] = (rec.places[r.place - 1] || 0) + 1;
+      rec.coins += r.coins;
+      rec.time += r.run.t;
+      this.records.set(r.name, rec);
+    }
+    const n = this.race.runners.length;
+    const rate = (rec) => (rec.time > 0 ? (rec.coins * 60) / rec.time : 0);
+    // most wins first, then most seconds, and so on, then coins a minute
+    const key = (r) => { const rec = this.records.get(r.name); return [...Array.from({ length: n }, (_, i) => rec.places[i] || 0), rate(rec)]; };
+    const order = [...this.cards.keys()].sort((a, b) => {
+      const ka = key(a), kb = key(b);
+      for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return kb[i] - ka[i];
+      return 0;
+    });
+    for (const r of order) {
+      const rec = this.records.get(r.name), card = this.cards.get(r);
+      const p = (i) => rec.places[i] || 0;
+      card.querySelector('.record').textContent =
+        `${rec.races} race${rec.races > 1 ? 's' : ''} · 1st ${p(0)} · 2nd ${p(1)} · 3rd ${p(2)} · ${Math.round(rate(rec))} coins/min`;
+      this.panel.appendChild(card);
+    }
   }
 
   togglePanel() { if (this.cards.size) this.panel.hidden = !this.panel.hidden; }
@@ -163,6 +197,7 @@ export class Hud {
       this.button.hidden = true;
       this.sub.classList.remove('show');
     } else if (state === 'gameover') {
+      this._record();
       const w = this.race.winner;
       this._show(w ? `${w.name} wins!` : 'Everyone is out', w ? w.color : '#fff');
       this.sub.textContent = `${this.race.t.toFixed(1)} s`;
