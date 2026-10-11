@@ -112,3 +112,35 @@ simulated races last about 20 to 45 seconds.
 
 **Why.** The demo runs with no keys at all, and the bots are a baseline the
 models have to beat.
+
+## 5. Models in the race
+
+**Choice.** The game runs in the browser; a small Python server reaches the
+models. The page and the server talk over one WebSocket. Each model runner
+keeps one question in flight: the page sends what the runner sees, the
+server asks the model, and the move it answers is applied the moment it
+arrives, after which the page asks again (see 3). The server turns what the
+runner sees into a short text and five options, in the request shape Entune
+uses: left, right, jump, roll and keep going, each described.
+
+What a runner sees: its lane and what it is doing (running, in the air,
+rolling, changing lanes, on a train's roof), its last move, its place and the
+runner just ahead and behind, how far behind it the ground is breaking, and
+for each lane what is ahead in the next 60 m: low barriers to jump, high
+barriers to roll under, buffer stops, ramps and trains, standing or coming
+at it, with their distances.
+
+Players are chosen when the server starts (`--players jev,openai,bot`); seats
+without a model are bots. API keys come from the environment or a `.env` file
+and stay in the server. A failed or unusable answer is shown and the runner
+asks again half a second later. One key shows or hides the decision panel:
+per model its last choice, the probability of each move, its latency and
+decisions per second.
+
+**Why.** Keys never reach a page, the model code is plain Python that tests
+can drive with recorded answers, and the game keeps its own clock.
+
+**Rejected.** Calling the models from the page: the keys would sit in the
+browser. Sending pixels or the raw obstacle list: decision models answer
+questions about text, and Entune's tested shape is a described state and
+described options.
