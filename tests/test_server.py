@@ -117,7 +117,6 @@ def test_a_key_that_does_not_work_stops_the_command_and_says_which(monkeypatch, 
     from decision_arena import server
 
     monkeypatch.setattr(server, "PLAYERS", {"rejected": Rejected, "fine": Fake})
-    monkeypatch.setattr(Fake, "aclose", lambda self: asyncio.sleep(0), raising=False)
     with pytest.raises(SystemExit):
         server.main(["--players", "rejected,fine", "--no-browser"])
     said = capsys.readouterr().out

@@ -147,7 +147,8 @@ async def check(names: list[str]) -> list[str]:
             fix = f" Check {where} in .env, or choose other players." if where else ""
             return f"{model.name} did not answer ({str(exc)[:160]}).{fix}"
         finally:
-            await model.aclose()
+            if close := getattr(model, "aclose", None):  # not part of a Model: only if it has one
+                await close()
         return None
 
     found = await asyncio.gather(*(one(n) for n in names if n not in ("bot", "laya")))
