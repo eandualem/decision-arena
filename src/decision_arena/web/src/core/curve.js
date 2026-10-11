@@ -18,21 +18,12 @@ import { CURVE } from '../config.js';
 // x = sideways bend (+ bends right), y = downward bend, z = distance from camera where bending starts
 export const curveUniform = { value: new THREE.Vector3(CURVE.x, CURVE.y, CURVE.start) };
 
-// Decision Arena: the ground collapsing behind the race. Everything behind the edge (world z greater than
-// x) breaks into 1.6 m pieces that fall away, each a little later than the last (y: 1 = on; z: seconds of
-// extra fall once the edge has stopped, so pieces already going keep going). The camera's world matrix turns
-// view-space positions back into world space.
-export const collapseUniform = { value: new THREE.Vector4(1e9, 0, 0, 0) };
-export const camWorldUniform = { value: new THREE.Matrix4() };
-
 let installed = false;
 
 export function applyCurve(shader) {
   shader.uniforms.uCurve = curveUniform;
-  shader.uniforms.uCollapse = collapseUniform;
-  shader.uniforms.uCamWorld = camWorldUniform;
   if (!shader.vertexShader.startsWith('#define USE_CURVE')) {
-    shader.vertexShader = '#define USE_CURVE\nuniform vec3 uCurve;\nuniform vec4 uCollapse;\nuniform mat4 uCamWorld;\n' + shader.vertexShader;
+    shader.vertexShader = '#define USE_CURVE\nuniform vec3 uCurve;\n' + shader.vertexShader;
   }
 }
 
@@ -47,18 +38,7 @@ export function installCurvedWorld() {
   }
   THREE.ShaderChunk.project_vertex = chunk.replace(target, /* glsl */`
 #if defined( USE_CURVE ) && !defined( DEPTH_PACKING ) && !defined( DISTANCE ) && !defined( NO_CURVE )
-	if ( uCollapse.y > 0.5 ) {
-		vec4 cwWorld = uCamWorld * mvPosition;
-		vec2 cwTile = floor( cwWorld.xz / 1.6 );
-		float cwHash = fract( sin( dot( cwTile, vec2( 12.9898, 78.233 ) ) ) * 43758.5453 );
-		float cwBehind = ( cwTile.y + 0.5 ) * 1.6 - uCollapse.x - cwHash * 2.5;
-		if ( cwBehind > 0.0 ) {
-			float cwT = cwBehind / 22.0 + uCollapse.z;
-			cwWorld.y -= 15.0 * cwT * cwT + cwHash * cwT * 2.0;
-			cwWorld.x += ( cwHash - 0.5 ) * 2.5 * cwT;
-			mvPosition = viewMatrix * cwWorld;
-		}
-	}
+	vec4 cwUnbent = mvPosition;   // Decision Arena: clipping planes test the unbent position (see below)
 	{
 		float cwDepth = max( 0.0, -mvPosition.z - uCurve.z );
 		float cwD2 = cwDepth * cwDepth;
@@ -67,6 +47,17 @@ export function installCurvedWorld() {
 	}
 #endif
 	${target}`);
+  // Decision Arena: clipping planes are placed in the unbent world, so test them against unbent positions;
+  // otherwise a cut drifts from where it was put as the bend grows with distance.
+  const clip = '\tvClipPosition = - mvPosition.xyz;';
+  if (THREE.ShaderChunk.clipping_planes_vertex.includes(clip)) {
+    THREE.ShaderChunk.clipping_planes_vertex = THREE.ShaderChunk.clipping_planes_vertex.replace(clip, /* glsl */`
+#if defined( USE_CURVE ) && !defined( DEPTH_PACKING ) && !defined( DISTANCE ) && !defined( NO_CURVE )
+	vClipPosition = - cwUnbent.xyz;
+#else
+	vClipPosition = - mvPosition.xyz;
+#endif`);
+  } else console.warn('[curve] clipping_planes_vertex chunk changed; clipping uses bent positions');
   THREE.Material.prototype.onBeforeCompile = function (shader) { applyCurve(shader); };
 }
 

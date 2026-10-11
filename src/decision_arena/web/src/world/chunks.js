@@ -39,7 +39,10 @@ export class Chunks {
     const t0 = performance.now();
     const c = this.free.pop() || this._make();
     for (const key of KEYS) this.B[key].reset();
+    // Decision Arena: the buildings in this chunk, for the collapse (see Scenery blocks)
+    this.scenery.blocks = c.blocks = [];
     this.scenery.build(k, this.B);
+    this.scenery.blocks = null;
     for (const key of KEYS) {
       const m = c.meshes[key];
       this.B[key].toGeometry(m.geometry, 6);
