@@ -40,9 +40,10 @@ watch and practical for only two to four players.
   runs through obstacles for 2 s while it gets going again. A crash costs
   ground rather than ending the race.
 - **The collapse.** The ground falls away behind the pack. The edge is at
-  most 30 m behind the leader at the start, closing to 6 m. A runner it
-  reaches tumbles into the chasm and is out once the ground under it
-  breaks, so a crash early in the race
+  most 30 m behind the leader at the start, closing to 12 m, and runs a
+  little slower than the runners. A runner it reaches tumbles into the
+  chasm and is out once the ground under it breaks, so a crash early in
+  the race
   can be survived and a crash late in it cannot. The last runner left wins,
   and the ground keeps breaking up to just behind the winner. What the
   ground takes keeps its shape as it goes. Nothing breaks along a straight
@@ -130,10 +131,16 @@ for each lane what is ahead in the next 60 m: low barriers to jump, high
 barriers to roll under, buffer stops, ramps and trains, standing or coming
 at it, with their distances.
 
-Players are chosen when the server starts (`--players jev,openai,bot`); seats
-without a model are bots. API keys come from the environment or a `.env` file
-and stay in the server. A failed or unusable answer is shown and the runner
-asks again half a second later. One key shows or hides the decision panel:
+Players are chosen when the server starts (`--players jev,openai,laya`). By
+default every model whose key is set races, up to six, with no bots; bots
+run only when named, or when no model can. The models: Jev, OpenAI and
+Perplexity through their own APIs, Cloudflare's Clef-flash, Microsoft
+Decision-1 and Liquid D1 through Vercel's AI Gateway (one key for both), and
+Laya on this computer. API keys come from the environment or a `.env` file
+and stay in the server. Each model is asked one question as the command
+starts; if any does not answer, the command stops and says which, and which
+key to check. During a race a failed or unusable answer is shown and the
+runner asks again half a second later. One key shows or hides the decision panel:
 per model its last choice, the probability of each move, its latency and
 decisions per second.
 

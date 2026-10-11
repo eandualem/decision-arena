@@ -11,9 +11,9 @@ import { PackCamera } from './camera.js';
 export const RACE = {
   rampSeconds: 110,     // base speed rises from SPEED.start toward SPEED.max on this time scale
   startGap: 30,         // the collapsing edge may be at most this far behind the leader at the start...
-  minGap: 6,            // ...shrinking to this...
-  closeRate: 0.12,      // ...by this many metres per second
-  collapsePace: 0.96,   // the edge's own speed, as a fraction of the base speed
+  minGap: 12,           // ...shrinking to this...
+  closeRate: 0.08,      // ...by this many metres per second
+  collapsePace: 0.88,   // the edge's own speed, as a fraction of the base speed
   gridRow: 3.6,         // metres between grid rows
   countdown: 0.8,       // seconds per 3-2-1 step
   bumpCooldown: 0.5,    // seconds after a bump before the same runner can bump again

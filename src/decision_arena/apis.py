@@ -1,5 +1,5 @@
-"""Decision models behind an HTTP API: Jev at TypeSafe, and OpenAI's and Perplexity's
-Decisions APIs.
+"""Decision models behind an HTTP API: Jev at TypeSafe, OpenAI's and Perplexity's Decisions
+APIs, Cloudflare's Clef, and Microsoft's and Liquid's through Vercel's AI Gateway.
 
 They take the request shape Entune uses (TypeSafe's System One API): a shared `state`,
 and named choice questions whose options are described in text. OpenAI takes the same
@@ -35,8 +35,10 @@ class DecisionAPI:
         shape: str = "systemone",  # or "openai"
         transport: httpx.AsyncBaseTransport | None = None,
         local: bool = False,  # on this computer: reached directly, never through a proxy
+        key_name: str | None = None,  # where the key comes from, to say which one failed
     ) -> None:
         self.name, self._url, self._model, self._shape = name, url, model, shape
+        self.key_name = key_name
         self._key = key
         self._http = httpx.AsyncClient(
             transport=transport,
@@ -50,6 +52,9 @@ class DecisionAPI:
         if not response.is_success:
             raise RuntimeError(f"HTTP {response.status_code}: {_detail(response, self._key)}")
         return _answer(response.json(), self._shape)
+
+    async def aclose(self) -> None:
+        await self._http.aclose()
 
     def _request(self, question: Question) -> dict[str, Any]:
         if self._shape == "openai":
@@ -97,6 +102,8 @@ def _answer(data: Any, shape: str) -> Answer:
     """The validated choice and probabilities. Jev rounds each probability to two
     decimals, so five can sum to 0.98, as Entune allows; anything unusable raises, and the
     runner asks again."""
+    if isinstance(data, dict) and isinstance(data.get("result"), dict):
+        data = data["result"]  # Cloudflare wraps its answer
     answers = data.get("answers") if isinstance(data, dict) else None
     if shape == "openai" and isinstance(answers, list):
         answers = {
@@ -137,29 +144,49 @@ def _key(variable: str, name: str) -> str:
     return key
 
 
+def _api(name: str, url: str, model: str, variable: str, shape: str = "systemone") -> DecisionAPI:
+    return DecisionAPI(name, url, model, _key(variable, name), shape, key_name=variable)
+
+
 def jev() -> DecisionAPI:
-    return DecisionAPI(
-        "Jev",
-        "https://api.typesafe.ai/v1/systemone",
-        "jev-1.13.0",
-        _key("TYPESAFE_API_KEY", "Jev"),
-    )
+    return _api("Jev", "https://api.typesafe.ai/v1/systemone", "jev-1.13.0", "TYPESAFE_API_KEY")
 
 
 def openai() -> DecisionAPI:
-    return DecisionAPI(
-        "OpenAI",
-        "https://api.openai.com/v1/decisions",
-        "gpt-6-luna",
-        _key("OPENAI_API_KEY", "OpenAI"),
-        shape="openai",
+    return _api(
+        "OpenAI", "https://api.openai.com/v1/decisions", "gpt-6-luna", "OPENAI_API_KEY", "openai"
     )
 
 
 def perplexity() -> DecisionAPI:
-    return DecisionAPI(
+    return _api(
         "Perplexity",
         "https://api.perplexity.ai/v1/decisions",
         "pplx-decider-v1.1-27b",
-        _key("PERPLEXITY_API_KEY", "Perplexity"),
+        "PERPLEXITY_API_KEY",
+    )
+
+
+# Vercel's AI Gateway reaches many decision models with one key, in OpenAI's shape.
+GATEWAY = "https://ai-gateway.vercel.sh/v1/decisions"
+
+
+def microsoft() -> DecisionAPI:
+    return _api(
+        "Microsoft", GATEWAY, "microsoft/microsoft-decision-1", "AI_GATEWAY_API_KEY", "openai"
+    )
+
+
+def liquid() -> DecisionAPI:
+    return _api("Liquid", GATEWAY, "liquid/d1", "AI_GATEWAY_API_KEY", "openai")
+
+
+def clef() -> DecisionAPI:
+    """Cloudflare's Clef-flash, its fast decision model, on Workers AI."""
+    account = _key("CLOUDFLARE_ACCOUNT_ID", "Clef")
+    return _api(
+        "Clef",
+        f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/cloudflare/clef-flash",
+        "clef-flash",
+        "CLOUDFLARE_AUTH_TOKEN",
     )

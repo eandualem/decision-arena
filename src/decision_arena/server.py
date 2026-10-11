@@ -27,12 +27,23 @@ from decision_arena.models import Model, question
 
 WEB = Path(__file__).parent / "web"
 
-# The players the command knows, by the name you type. "bot" is a seat without a model.
+# The players the command knows, by the name you type, in the order it seats them when you
+# name none. "bot" is a seat without a model.
 PLAYERS: dict[str, Callable[[], Model]] = {
     "jev": apis.jev,
-    "laya": local.laya,
     "openai": apis.openai,
     "perplexity": apis.perplexity,
+    "microsoft": apis.microsoft,
+    "liquid": apis.liquid,
+    "clef": apis.clef,
+    "laya": local.laya,
+}
+
+# A question every model is asked once at the start, so a key that does not work stops the
+# command before the race rather than a runner during it.
+PROBE = {
+    "lane": 0, "doing": ["running"], "speed": 10, "last": None, "place": 1, "of": 1,
+    "ahead": None, "behind": None, "edge": 30, "lanes": [[], [], []],
 }
 
 
@@ -106,6 +117,43 @@ def load_env() -> None:
     load_dotenv(Path.cwd() / ".env", override=False)
 
 
+def available() -> list[str]:
+    """The players that can run here: their keys are set, or (Laya) its engine is installed."""
+    names = []
+    for name, make in PLAYERS.items():
+        if name == "laya":
+            if local.engine_python() is not None:
+                names.append(name)
+            continue
+        try:
+            make()
+        except apis.MissingKey:
+            continue
+        names.append(name)
+    return names
+
+
+async def check(names: list[str]) -> list[str]:
+    """Ask each named API model the probe question at once (on its own client, as the race's
+    run in another event loop); say what failed for each one that did. Laya checks itself
+    as it starts."""
+
+    async def one(name: str) -> str | None:
+        model = PLAYERS[name]()
+        try:
+            await model.decide(question(PROBE))
+        except Exception as exc:
+            where = getattr(model, "key_name", None)
+            fix = f" Check {where} in .env, or choose other players." if where else ""
+            return f"{model.name} did not answer ({str(exc)[:160]}).{fix}"
+        finally:
+            await model.aclose()
+        return None
+
+    found = await asyncio.gather(*(one(n) for n in names if n not in ("bot", "laya")))
+    return [f for f in found if f]
+
+
 def main(argv: list[str] | None = None) -> None:
     load_env()
     parser = argparse.ArgumentParser(
@@ -114,14 +162,17 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--players",
         default="",
-        help=f"comma-separated, one per runner: {', '.join(PLAYERS)} or bot (default: all bots)",
+        help=f"comma-separated, one per runner: {', '.join(PLAYERS)} or bot "
+        "(default: every model with its key set, up to six; bots if none)",
     )
-    parser.add_argument("--runners", type=int, help="two to six runners (default 4, or one per player)")
+    parser.add_argument("--runners", type=int, help="two to six runners (default: one per player)")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--no-browser", action="store_true", help="don't open the page")
     args = parser.parse_args(argv)
-    names = [n.strip().lower() for n in args.players.split(",") if n.strip()]
-    runners = args.runners or max(4, len(names))
+    names = [n.strip().lower() for n in args.players.split(",") if n.strip()] or available()[:6]
+    if len(names) == 1:
+        names.append("bot")  # a race needs two
+    runners = args.runners or len(names) or 4
     if not 2 <= runners <= 6:
         parser.error("--runners takes 2 to 6")
     if len(names) > runners:
@@ -130,9 +181,14 @@ def main(argv: list[str] | None = None) -> None:
     if unknown:
         parser.error(f"unknown player {unknown[0]!r}: choose from {', '.join(PLAYERS)} or bot")
     try:
+        failed = asyncio.run(check(names))
+        if failed:
+            print("Not starting. " + " ".join(failed), flush=True)
+            raise SystemExit(1)
         models = [None if n == "bot" else PLAYERS[n]() for n in names]
     except apis.MissingKey as exc:
         parser.error(str(exc))
+    print("Players: " + ", ".join(m.name if m else "bot" for m in models), flush=True)
     models += [None] * (runners - len(models))
     url = f"http://127.0.0.1:{args.port}/?runners={runners}"
     print(f"Decision Arena at {url}", flush=True)

@@ -74,6 +74,11 @@ def test_five_probabilities_rounded_to_two_decimals_may_sum_to_098():
     assert answer.move == "left"
 
 
+def test_cloudflare_wraps_its_answer_in_result():
+    answer, _ = ask("systemone", {"result": SYSTEMONE, "success": True})
+    assert answer.move == "right"
+
+
 def test_malformed_answer_raises_so_the_runner_asks_again():
     bad = {"answers": {"move": {"choice": "up", "probabilities": {"left": 1.0}}}}
     with pytest.raises(ValueError):

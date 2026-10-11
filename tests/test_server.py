@@ -100,3 +100,26 @@ def test_a_new_question_replaces_one_still_in_flight(seen):
         ws.send_text(json.dumps({"type": "ask", "seat": 0, "seq": 2, "seen": seen}))
         reply = json.loads(ws.receive_text())
     assert reply["seq"] == 2 and reply["move"] == "jump"
+
+
+class Rejected:
+    name = "Rejected"
+    key_name = "REJECTED_API_KEY"
+
+    async def decide(self, question):
+        raise RuntimeError("HTTP 401: Incorrect API key provided: [key]")
+
+    async def aclose(self):
+        pass
+
+
+def test_a_key_that_does_not_work_stops_the_command_and_says_which(monkeypatch, capsys):
+    from decision_arena import server
+
+    monkeypatch.setattr(server, "PLAYERS", {"rejected": Rejected, "fine": Fake})
+    monkeypatch.setattr(Fake, "aclose", lambda self: asyncio.sleep(0), raising=False)
+    with pytest.raises(SystemExit):
+        server.main(["--players", "rejected,fine", "--no-browser"])
+    said = capsys.readouterr().out
+    assert "Rejected did not answer (HTTP 401" in said and "Check REJECTED_API_KEY in .env" in said
+    assert "Fake" not in said
