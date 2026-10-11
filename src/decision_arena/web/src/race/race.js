@@ -2,6 +2,7 @@
 // runners bumping and passing each other, the ground collapsing behind them, places and the finish.
 // Other systems read `info` (world streaming, effects, audio) and `rig` (effects anchors): both follow the pack.
 import { EV } from '../core/events.js';
+import { storage } from '../core/storage.js';
 import { SPEED, PHYS, PLAYER } from '../config.js';
 import { HW, HD } from '../gameplay/physics.js';
 import { Collapse } from './collapse.js';
@@ -10,10 +11,10 @@ import { PackCamera } from './camera.js';
 
 export const RACE = {
   rampSeconds: 110,     // base speed rises from SPEED.start toward SPEED.max on this time scale
-  startGap: 30,         // the collapsing edge may be at most this far behind the leader at the start...
-  minGap: 6,            // ...shrinking to this...
-  closeRate: 0.12,      // ...by this many metres per second
-  collapsePace: 0.96,   // the edge's own speed, as a fraction of the base speed
+  startGap: 40,         // the collapsing edge may be at most this far behind the leader at the start...
+  minGap: 20,           // ...shrinking to this...
+  closeRate: 0.08,      // ...by this many metres per second
+  collapsePace: 0.88,   // the edge's own speed, as a fraction of the base speed
   gridRow: 3.6,         // metres between grid rows
   countdown: 0.8,       // seconds per 3-2-1 step
   bumpCooldown: 0.5,    // seconds after a bump before the same runner can bump again
@@ -21,6 +22,9 @@ export const RACE = {
 
 // Starting slots, front row first; the middle lane leads each row.
 const SLOTS = [[0, 0], [-1, 0], [1, 0], [0, 1], [-1, 1], [1, 1]];
+
+// The grid rotation is kept across reloads and restarts, so a reload does not put everyone back on their first slot.
+const ROTATION = 'decision-arena.races';
 
 export class Race {
   constructor(ctx) {
@@ -36,7 +40,7 @@ export class Race {
     this.runners = [];
     this.order = [];
     this.rig = null;
-    this.races = 0;
+    this.races = storage.get(ROTATION, 0) | 0;
     this.t = 0;
     this.base = 0;
     this.winner = null;
@@ -104,6 +108,7 @@ export class Race {
   go() {
     if (this.state !== 'menu' && this.state !== 'gameover') return;
     if (this.state === 'gameover') { this.races++; this.toGrid(); }
+    storage.set(ROTATION, this.races + 1);   // the next race, even after a reload, starts one slot on
     this.countdown.n = 3; this.countdown.t = 0;
     this.camera.toFollow(RACE.countdown * 3);
     this._set('intro');
@@ -179,12 +184,23 @@ export class Race {
         if (mover && Math.abs(dz) < 0.45) { this._bounce(mover); continue; }
         // Who was behind before this step, so a runner that passed through another within it is the rear one.
         const rear = (a.prevZ ?? A.z) > (b.prevZ ?? B.z) ? a : b, front = rear === a ? b : a;
-        rear.b.z = front.b.z + 2 * HD + 0.12;
+        const behind = front.b.z + 2 * HD + 0.12;
+        if (this._clear(rear, behind)) rear.b.z = behind;   // never into an obstacle: its physics would forgive it
         if (this.t - (rear.bumpT ?? -9) < RACE.bumpCooldown) continue;
         rear.bumpT = this.t;
         rear.stumble('runner');
       }
     }
+  }
+
+  /** Whether a runner's body would be clear of every obstacle (except ramps, which it walks up) at z. */
+  _clear(r, z) {
+    const b = r.b, h = b.rollT > 0 ? PLAYER.rollHeight : PLAYER.height;
+    for (const c of this.ctx.level.getColliders(z - HD, z + HD, this._cols)) {
+      if (c.ramp || b.x + HW <= c.minX || b.x - HW >= c.maxX) continue;
+      if (b.y + 0.04 < c.maxY && b.y + h > c.minY) return false;
+    }
+    return true;
   }
 
   _bounce(r) {

@@ -286,78 +286,85 @@ function collideStep(b, dt, W, cfg, ev, px, py, pz, ph) {
   let h = b.rollT > 0 ? PLAYER.rollHeight : PLAYER.height;
   let x0 = b.x - HW, x1 = b.x + HW, y0 = b.y + lift, y1 = b.y + h;
   const z0 = b.z - hd, z1 = b.z + hd;
-  for (let i = 0; i < cols.length; i++) {
-    const c = cols[i];
-    const dz = c.vz ? c.vz * W.tOff : 0;
-    const cz0 = c.minZ + dz, cz1 = c.maxZ + dz;
-    if (z0 >= cz1 || z1 <= cz0 || x0 >= c.maxX || x1 <= c.minX) continue;
+  // A side hit puts x back but keeps the step's z, so an obstacle reached in the same step is checked again
+  // from there: once, with a frontal crash taking precedence over the side stumble.
+  for (let pass = 0, bounced = false; pass < 2; pass++, bounced = false) {
+    for (let i = 0; i < cols.length; i++) {
+      const c = cols[i];
+      const dz = c.vz ? c.vz * W.tOff : 0;
+      const cz0 = c.minZ + dz, cz1 = c.maxZ + dz;
+      if (z0 >= cz1 || z1 <= cz0 || x0 >= c.maxX || x1 <= c.minX) continue;
 
-    if (c.ramp) {
-      const rh = rampHeightAt(c.ramp, b.z);
-      if (b.y + PHYS.stepUp >= rh) continue;            // walkable here: support handles it
+      if (c.ramp) {
+        const rh = rampHeightAt(c.ramp, b.z);
+        if (b.y + PHYS.stepUp >= rh) continue;            // walkable here: support handles it
+        if (inGrace(b, c.id)) continue;
+        const fromSide = px + HW <= c.minX + 1e-3 || px - HW >= c.maxX - 1e-3;
+        if (fromSide) {
+          if (z1 - cz0 < clipRear) { addGrace(b, c.id); continue; }
+          const side = px < (c.minX + c.maxX) * 0.5 ? 1 : -1;
+          bounced = true;
+          if (sideHit(b, c, cfg, ev, px, side)) break;
+        } else {
+          // below the ramp surface without coming from the side (e.g. dropped onto it): lift onto the slope
+          stepOnto(b, rh, ev);
+        }
+        x0 = b.x - HW; x1 = b.x + HW; y0 = b.y + lift; y1 = b.y + h;
+        continue;
+      }
+
+      if (y0 >= c.maxY || y1 <= c.minY) continue;
       if (inGrace(b, c.id)) continue;
-      const fromSide = px + HW <= c.minX + 1e-3 || px - HW >= c.maxX - 1e-3;
-      if (fromSide) {
-        if (z1 - cz0 < clipRear) { addGrace(b, c.id); continue; }
-        const side = px < (c.minX + c.maxX) * 0.5 ? 1 : -1;
-        if (sideHit(b, c, cfg, ev, px, side)) break;
-      } else {
-        // below the ramp surface without coming from the side (e.g. dropped onto it): lift onto the slope
-        stepOnto(b, rh, ev);
+
+      // Which face did we come through? The axis whose gap closed last during this step decides.
+      const pdz = c.vz ? c.vz * (W.tOff - dt) : 0;
+      const pcz0 = c.minZ + pdz, pcz1 = c.maxZ + pdz;
+      let contact = 0, best = -1, side = 0, g0, f;
+      g0 = py + lift - c.maxY; if (g0 >= -1e-3) { f = frac(g0, y0 - c.maxY); if (f > best) { best = f; contact = 1; } }
+      g0 = c.minY - (py + ph); if (g0 >= -1e-3) { f = frac(g0, c.minY - y1); if (f > best) { best = f; contact = 2; } }
+      g0 = pz0 - pcz1; if (g0 >= -1e-3) { f = frac(g0, z0 - cz1); if (f > best) { best = f; contact = 3; } }
+      g0 = pcz0 - pz1; if (g0 >= -1e-3) { f = frac(g0, cz0 - z1); if (f > best) { best = f; contact = 5; } }
+      g0 = c.minX - (px + HW); if (g0 >= -1e-3) { f = frac(g0, c.minX - x1); if (f > best) { best = f; contact = 4; side = 1; } }
+      g0 = (px - HW) - c.maxX; if (g0 >= -1e-3) { f = frac(g0, x0 - c.maxX); if (f > best) { best = f; contact = 4; side = -1; } }
+
+      if (contact === 1) {                       // from above: land on walkable tops, glide over barrier tops
+        if (c.top === 'walk') stepOnto(b, c.maxY, ev); else addGrace(b, c.id);
+      } else if (contact === 2) {                // head rose into an overhang: duck instead
+        b.rollT = Math.max(b.rollT, 0.06);
+        if (!b.grounded && b.vy > 0) { b.vy = 0; b.y = py; }
+        h = PLAYER.rollHeight;
+        addGrace(b, c.id);
+      } else if (contact === 3) {                // frontal
+        if (c.top === 'walk' && b.y + stepFront >= c.maxY) { stepOnto(b, c.maxY, ev); }
+        else if (c.top !== 'walk' && y0 >= c.maxY - clipTop) addGrace(b, c.id);
+        else if (c.minY > 0.3 && y1 <= c.minY + clipHead) addGrace(b, c.id);
+        else {
+          const ox = Math.min(x1, c.maxX) - Math.max(x0, c.minX);
+          if (ox < clipX && b.laneT < 1) {
+            const cx = (c.minX + c.maxX) * 0.5;
+            if ((b.lane * LANE_WIDTH - b.x) * (b.x - cx) > 0) addGrace(b, c.id);          // switching away: slip past
+            else { bounced = true; if (sideHit(b, c, cfg, ev, px, b.x < cx ? 1 : -1)) break; }   // switching into it: bump
+          } else if (cfg.invulnerable) {
+            if (c.top === 'walk') vault(b, c);
+            addGrace(b, c.id);
+          } else {
+            ev.hitType = 'crash'; ev.hit = c; ev.hitSide = 0;
+            break;
+          }
+        }
+      } else if (contact === 4) {                // side
+        if (c.top === 'walk' && b.y + PHYS.stepUp >= c.maxY) stepOnto(b, c.maxY, ev);
+        else if (c.top !== 'walk' && y0 >= c.maxY - clipTop) addGrace(b, c.id);
+        else if (c.minY > 0.3 && y1 <= c.minY + clipHead) addGrace(b, c.id);
+        else if (z1 - cz0 < clipRear) addGrace(b, c.id);
+        else { bounced = true; if (sideHit(b, c, cfg, ev, px, side)) break; }
+      } else {                                   // was already inside / overtaken from behind: never punish
+        addGrace(b, c.id);
       }
       x0 = b.x - HW; x1 = b.x + HW; y0 = b.y + lift; y1 = b.y + h;
-      continue;
     }
-
-    if (y0 >= c.maxY || y1 <= c.minY) continue;
-    if (inGrace(b, c.id)) continue;
-
-    // Which face did we come through? The axis whose gap closed last during this step decides.
-    const pdz = c.vz ? c.vz * (W.tOff - dt) : 0;
-    const pcz0 = c.minZ + pdz, pcz1 = c.maxZ + pdz;
-    let contact = 0, best = -1, side = 0, g0, f;
-    g0 = py + lift - c.maxY; if (g0 >= -1e-3) { f = frac(g0, y0 - c.maxY); if (f > best) { best = f; contact = 1; } }
-    g0 = c.minY - (py + ph); if (g0 >= -1e-3) { f = frac(g0, c.minY - y1); if (f > best) { best = f; contact = 2; } }
-    g0 = pz0 - pcz1; if (g0 >= -1e-3) { f = frac(g0, z0 - cz1); if (f > best) { best = f; contact = 3; } }
-    g0 = pcz0 - pz1; if (g0 >= -1e-3) { f = frac(g0, cz0 - z1); if (f > best) { best = f; contact = 5; } }
-    g0 = c.minX - (px + HW); if (g0 >= -1e-3) { f = frac(g0, c.minX - x1); if (f > best) { best = f; contact = 4; side = 1; } }
-    g0 = (px - HW) - c.maxX; if (g0 >= -1e-3) { f = frac(g0, x0 - c.maxX); if (f > best) { best = f; contact = 4; side = -1; } }
-
-    if (contact === 1) {                       // from above: land on walkable tops, glide over barrier tops
-      if (c.top === 'walk') stepOnto(b, c.maxY, ev); else addGrace(b, c.id);
-    } else if (contact === 2) {                // head rose into an overhang: duck instead
-      b.rollT = Math.max(b.rollT, 0.06);
-      if (!b.grounded && b.vy > 0) { b.vy = 0; b.y = py; }
-      h = PLAYER.rollHeight;
-      addGrace(b, c.id);
-    } else if (contact === 3) {                // frontal
-      if (c.top === 'walk' && b.y + stepFront >= c.maxY) { stepOnto(b, c.maxY, ev); }
-      else if (c.top !== 'walk' && y0 >= c.maxY - clipTop) addGrace(b, c.id);
-      else if (c.minY > 0.3 && y1 <= c.minY + clipHead) addGrace(b, c.id);
-      else {
-        const ox = Math.min(x1, c.maxX) - Math.max(x0, c.minX);
-        if (ox < clipX && b.laneT < 1) {
-          const cx = (c.minX + c.maxX) * 0.5;
-          if ((b.lane * LANE_WIDTH - b.x) * (b.x - cx) > 0) addGrace(b, c.id);          // switching away: slip past
-          else if (sideHit(b, c, cfg, ev, px, b.x < cx ? 1 : -1)) break;                // switching into it: bump
-        } else if (cfg.invulnerable) {
-          if (c.top === 'walk') vault(b, c);
-          addGrace(b, c.id);
-        } else {
-          ev.hitType = 'crash'; ev.hit = c; ev.hitSide = 0;
-          break;
-        }
-      }
-    } else if (contact === 4) {                // side
-      if (c.top === 'walk' && b.y + PHYS.stepUp >= c.maxY) stepOnto(b, c.maxY, ev);
-      else if (c.top !== 'walk' && y0 >= c.maxY - clipTop) addGrace(b, c.id);
-      else if (c.minY > 0.3 && y1 <= c.minY + clipHead) addGrace(b, c.id);
-      else if (z1 - cz0 < clipRear) addGrace(b, c.id);
-      else if (sideHit(b, c, cfg, ev, px, side)) break;
-    } else {                                   // was already inside / overtaken from behind: never punish
-      addGrace(b, c.id);
-    }
-    x0 = b.x - HW; x1 = b.x + HW; y0 = b.y + lift; y1 = b.y + h;
+    if (!bounced || ev.hitType === 'crash') break;
+    x0 = b.x - HW; x1 = b.x + HW;
   }
   purgeGrace(b);
 }

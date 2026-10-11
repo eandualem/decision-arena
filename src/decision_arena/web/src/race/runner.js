@@ -271,6 +271,7 @@ export class Runner {
     const P = this.player;
     if (kind === 'pogo') this.timers.pogo = 0;
     P.invulnT = Math.max(P.invulnT, kind === 'pogo' ? 0.6 : 0.9);
+    P.blinkT = Math.max(P.blinkT, P.invulnT);   // blinks, as after a crash, so running through obstacles shows why
     this._updateProps();
   }
 

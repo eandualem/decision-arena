@@ -27,8 +27,10 @@ watch and practical for only two to four players.
 ## 2. The race
 
 - **Start.** Up to six runners start on a staggered grid across the three
-  lanes, two rows deep. The slots rotate from race to race, so everyone gets
-  every start.
+  lanes, two rows deep. The slots rotate from race to race, so over as many
+  races as there are runners everyone starts once from every slot. The page
+  keeps the count in the browser, so a reload or a restarted server carries
+  on the rotation instead of starting it again.
 - **Speed.** Everyone shares a base speed that rises over the race. Each
   runner's pace rises while it runs cleanly (up to +10%) and with the boost
   pickup, and drops for a moment after a stumble, so the better runner pulls
@@ -38,11 +40,21 @@ watch and practical for only two to four players.
   another runner, or running on the train roofs above it, passes it.
 - **Crashes.** A crash knocks a runner down for 0.7 s. It then gets up and
   runs through obstacles for 2 s while it gets going again. A crash costs
-  ground rather than ending the race.
+  ground rather than ending the race. Landing from a jetpack or pogo stick
+  protects a runner the same way for under a second. Either way it blinks,
+  so a runner passing through an obstacle always shows why.
+- **No other way through.** Two cases let a runner pass a barrier untouched,
+  and neither does now. Bouncing off a train's side, while reaching a
+  barrier in the same step, skipped the barrier. Being pushed back behind
+  another runner could land a runner inside a barrier. Rail Dash forgives a
+  runner it finds already inside an obstacle, which suits one player but not
+  these two. The step is now checked again after a side bounce, and a
+  runner is only pushed back into clear space.
 - **The collapse.** The ground falls away behind the pack. The edge is at
-  most 30 m behind the leader at the start, closing to 6 m. A runner it
-  reaches tumbles into the chasm and is out once the ground under it
-  breaks, so a crash early in the race
+  most 40 m behind the leader at the start, closing to 20 m, and runs a
+  little slower than the runners. A runner it reaches tumbles into the
+  chasm and is out once the ground under it breaks, so a crash early in
+  the race
   can be survived and a crash late in it cannot. The last runner left wins,
   and the ground keeps breaking up to just behind the winner. What the
   ground takes keeps its shape as it goes. Nothing breaks along a straight
@@ -112,3 +124,94 @@ simulated races last about 20 to 45 seconds.
 
 **Why.** The demo runs with no keys at all, and the bots are a baseline the
 models have to beat.
+
+## 5. Models in the race
+
+**Choice.** The game runs in the browser; a small Python server reaches the
+models. The page and the server talk over one WebSocket. Each model runner
+keeps one question in flight: the page sends what the runner sees, the
+server asks the model, and the move it answers is applied the moment it
+arrives, after which the page asks again (see 3). The server turns what the
+runner sees into a short text and five options, in the request shape Entune
+uses: left, right, jump, roll and keep going, each described.
+
+What a runner sees, in this order:
+- **Itself:** its lane and what it is doing (running, in the air and when it
+  lands, rolling and when it stands up, changing lanes from which lane to
+  which, on a train's roof, wearing spring shoes, protected after a crash or
+  a landing), its speed, how long its own model's answers have taken (the
+  mean of its last five), and its last move.
+- **The lanes,** its own first, over the next 100 m: up to four obstacles
+  each. Each obstacle has its distance, when the runner reaches it at its
+  current speed (a train coming at it closes at both speeds), and how long
+  after its answer arrives that is. A ramp is told together with the train
+  it leads onto. A train beside the runner in the next lane says that moving
+  into that lane now bounces it off. On a roof, barriers are marked as on
+  the ground below.
+- **The others:** its place, and every other runner still racing, with its
+  lane, its gap and whether it is down after a crash.
+- **The collapse:** how far behind the ground is breaking and whether that
+  is gaining on it.
+
+The instructions give the rules a decision needs. The game's timing windows,
+measured by stepping its physics: when a jump clears a low barrier or a
+buffer stop, and how long a roll stays low. That changing lanes into the side
+of a train or barrier bounces a runner back. That a ramp leads onto its
+train's roof, and that a roof ends in a drop unless the next roof starts
+within 3 m. That spring shoes clear trains.
+
+The lanes come before the standings because they decide the move. A
+100 m look-ahead is over 3 s at top speed, enough for two answers. Up to four
+obstacles a lane keeps the text short.
+
+Every runner gets the same fields and the same text; only its own position,
+and its own model's answer time, differ. Telling a model its answer time is
+what lets it act on time: an answer made at 0.5 s lands 7 m later at 14 m/s,
+and without it, models jumped and rolled while obstacles were still far off.
+The text states facts and the rules of the game; it never says which move
+to make.
+
+Players are chosen when the server starts (`--players jev,openai,laya`). By
+default every model whose key is set races, up to six, with no bots; bots
+run only when named, or when no model can. The models: Jev, OpenAI and
+Perplexity through their own APIs, Cloudflare's Clef-flash, Microsoft
+Decision-1 and Liquid D1 through Vercel's AI Gateway (one key for both), and
+two models on this computer: Laya, and Liquid's open d1-3B, served by
+llama.cpp's `llama-server`. Both local servers answer the same System One
+questions as Jev; the command starts each on a private port with a key of its
+own and stops it when the command ends. API keys come from the environment or a `.env` file
+and stay in the server. Each model is asked one question as the command
+starts; if any does not answer, the command stops and says which, and which
+key to check. During a race a failed or unusable answer is shown and the
+runner asks again half a second later. One key shows or hides the decision panel:
+per model its last choice, the probability of each move, its latency and
+decisions per second, and its record over the races since the page loaded.
+The record shows how often it finished first, second and third, and coins
+a minute on the track. The cards are ordered by it: most wins first, then
+most seconds, and so on. Coins count per minute, not in total, because a
+race stops when one runner is left. Models aren't told where coins are, and
+coins change nothing in the race, so coins a minute is a side measure.
+
+**Why.** Keys never reach a page, the model code is plain Python that tests
+can drive with recorded answers, and the game keeps its own clock.
+
+d1-3B races only when named. On a 16 GB Mac, with the game drawing in the
+browser, it held so much of the shared GPU memory that the race dropped from
+about 50 frames a second to about 6, even when only Laya was answering. Laya
+alone costs a few frames a second; running it on the CPU didn't help and made
+its answers three times slower, so it stays on the GPU.
+
+Why d1-3B as the second local model: among open-weight decision models that
+run on a laptop, it is small (3B parameters, 2.9 GB at 8 bits), its maker
+reports it on the same Decision Index as Jev (48.6 against Jev's 57.9), and
+llama.cpp serves it with no extra code. The 27B open models (Perplexity's
+decider, Clef) score higher but need more memory than a 16 GB laptop has
+to spare. Its weights are under Liquid's LFM Open License, not this project's
+MIT licence: the command downloads them from Liquid's page, and they are never
+shipped with this project.
+
+**Rejected.** Calling the models from the page: the keys would sit in the
+browser. Sending pixels or the raw obstacle list: decision models answer
+questions about text, and Entune's tested shape is a described state and
+described options. Saying when to jump or roll for each obstacle: that
+would be our choice, not the model's.

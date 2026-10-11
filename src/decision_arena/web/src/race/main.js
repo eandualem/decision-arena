@@ -13,6 +13,7 @@ import { Characters } from '../characters/characters.js';
 import { FX } from '../fx/fx.js';
 import { Race } from './race.js';
 import { Bot } from './bots.js';
+import { Gateway, ModelPlayer } from './models.js';
 import { Hud } from './hud.js';
 
 installCurvedWorld();
@@ -30,14 +31,28 @@ export const LOOKS = [
 ];
 const BOT_LAGS = [0, 0.12, 0.25, 0.4, 0.6, 0.8];   // seconds: bots of different speeds
 
-function botSeats(n) {
-  return LOOKS.slice(0, n).map((look, i) => ({
-    name: look.character[0].toUpperCase() + look.character.slice(1),
-    color: look.color,
-    character: look.character,
-    outfit: null,
-    controller: (runner) => new Bot(runner, BOT_LAGS[i]),
-  }));
+/** One seat per runner. `players` is the server's list (one entry per seat: a model's name, or null for a
+ *  bot); a model seat is named after its model and asks it through the gateway. */
+function seats(n, players) {
+  const gateway = players.some((p) => p.name) ? new Gateway(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`) : null;
+  return LOOKS.slice(0, n).map((look, i) => {
+    const model = players[i]?.name;
+    return {
+      name: model || look.character[0].toUpperCase() + look.character.slice(1),
+      color: look.color,
+      character: look.character,
+      outfit: null,
+      controller: model ? (runner) => new ModelPlayer(runner, i, gateway) : (runner) => new Bot(runner, BOT_LAGS[i]),
+    };
+  });
+}
+
+/** The players the server was started with; none when the page is served without it. */
+async function players() {
+  try {
+    const r = await fetch('players.json');
+    return r.ok ? await r.json() : [];
+  } catch { return []; }
 }
 
 // ---------------------------------------------------------------- renderer / scene / camera
@@ -86,13 +101,15 @@ resize();
 const race = ctx.game;
 const start = () => { ctx.audio.unlock?.(); race.go(); };
 const hud = new Hud(ctx, race, { onStart: start });
-const runners = Math.max(2, Math.min(6, +params.get('runners') || 4));
-race.setup(botSeats(runners));
+const list = await players();
+const runners = Math.max(2, Math.min(6, list.length || +params.get('runners') || 4));
+race.setup(seats(runners, list));
 hud.build();
 hud._onState(race.state);
 addEventListener('keydown', (e) => {
   if (e.code === 'Space' || e.code === 'Enter') { e.preventDefault(); start(); }
   if (e.code === 'KeyC') race.camera.toggleView();
+  if (e.code === 'KeyD') hud.togglePanel();
 });
 document.addEventListener('visibilitychange', () => ctx.audio.setSuspended?.(document.hidden));
 
