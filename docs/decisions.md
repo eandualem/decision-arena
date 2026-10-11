@@ -40,7 +40,7 @@ watch and practical for only two to four players.
   runs through obstacles for 2 s while it gets going again. A crash costs
   ground rather than ending the race.
 - **The collapse.** The ground falls away behind the pack. The edge is at
-  most 30 m behind the leader at the start, closing to 12 m, and runs a
+  most 40 m behind the leader at the start, closing to 20 m, and runs a
   little slower than the runners. A runner it reaches tumbles into the
   chasm and is out once the ground under it breaks, so a crash early in
   the race
