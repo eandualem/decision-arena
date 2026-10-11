@@ -176,7 +176,10 @@ default every model whose key is set races, up to six, with no bots; bots
 run only when named, or when no model can. The models: Jev, OpenAI and
 Perplexity through their own APIs, Cloudflare's Clef-flash, Microsoft
 Decision-1 and Liquid D1 through Vercel's AI Gateway (one key for both), and
-Laya on this computer. API keys come from the environment or a `.env` file
+two models on this computer: Laya, and Liquid's open d1-3B, served by
+llama.cpp's `llama-server`. Both local servers answer the same System One
+questions as Jev; the command starts each on a private port with a key of its
+own and stops it when the command ends. API keys come from the environment or a `.env` file
 and stay in the server. Each model is asked one question as the command
 starts; if any does not answer, the command stops and says which, and which
 key to check. During a race a failed or unusable answer is shown and the
@@ -191,6 +194,15 @@ coins change nothing in the race, so coins a minute is a side measure.
 
 **Why.** Keys never reach a page, the model code is plain Python that tests
 can drive with recorded answers, and the game keeps its own clock.
+
+Why d1-3B as the second local model: among open-weight decision models that
+run on a laptop, it is small (3B parameters, 2.9 GB at 8 bits), its maker
+reports it on the same Decision Index as Jev (48.6 against Jev's 57.9), and
+llama.cpp serves it with no extra code. The 27B open models (Perplexity's
+decider, Clef) score higher but need more memory than a 16 GB laptop has
+to spare. Its weights are under Liquid's LFM Open License, not this project's
+MIT licence: the command downloads them from Liquid's page, and they are never
+shipped with this project.
 
 **Rejected.** Calling the models from the page: the keys would sit in the
 browser. Sending pixels or the raw obstacle list: decision models answer

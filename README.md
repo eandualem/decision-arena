@@ -36,12 +36,21 @@ say.
 | `openai` | GPT-6 Luna, OpenAI Decisions API | `OPENAI_API_KEY` |
 | `perplexity` | Perplexity Decider 1.1 | `PERPLEXITY_API_KEY` |
 | `laya` | Laya, on your computer | none: install it with `uv tool install 'laya[serve]'` |
+| `d1` | Liquid d1-3B, on your computer | none: needs llama.cpp build 11483 or newer (see below) |
 | `clef` | Cloudflare Clef-flash on Workers AI | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN` |
 | `microsoft` | Microsoft Decision-1, through Vercel's AI Gateway | `AI_GATEWAY_API_KEY` |
 | `liquid` | Liquid D1, through Vercel's AI Gateway | `AI_GATEWAY_API_KEY` |
 
-Laya's first start downloads its model, about 850 MB; after that it starts in
-seconds.
+For d1-3B, install a [llama.cpp release](https://github.com/ggml-org/llama.cpp/releases)
+from build b11483 on, so that `llama-server` is on your `PATH`; `brew install llama.cpp`
+works too once Homebrew's version reaches that build. The command checks the build and
+says if it's too old.
+
+The two local models download on their first start: about 850 MB for Laya and
+2.9 GB for d1-3B. After that they start in seconds. d1-3B's weights come from
+[Liquid's page](https://huggingface.co/LiquidAI/d1-3B-GGUF) under Liquid's LFM
+Open License, separate from this project's MIT licence. That license doesn't
+cover commercial use by a company with $10 million or more in annual revenue.
 
 Before the race, every model is asked one question. If any of them fails to
 answer, the command stops and tells you which model failed and which key to
@@ -139,7 +148,7 @@ stepping its physics (`gameplay/physics.js`) at 14, 20 and 28 m/s.
 
 ### The request
 
-Jev, Perplexity, Clef and Laya take the System One request shape:
+Jev, Perplexity, Clef, Laya and d1-3B take the System One request shape:
 
 ```json
 {

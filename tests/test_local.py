@@ -2,6 +2,7 @@ import asyncio
 import os
 import sys
 
+import httpx
 import pytest
 
 from decision_arena import apis, local
@@ -82,3 +83,40 @@ def test_a_server_that_cannot_answer_fails_at_startup(monkeypatch, tmp_path):
     monkeypatch.setenv("FAKE_BROKEN", "1")
     with pytest.raises(apis.MissingKey, match="could not answer"):
         local.laya(ready_seconds=20)
+
+
+def test_without_llama_server_d1_says_how_to_install(monkeypatch):
+    monkeypatch.setattr(local.shutil, "which", lambda name: None)
+    with pytest.raises(apis.MissingKey, match="brew install llama.cpp"):
+        local.d1()
+
+
+def test_d1_starts_llama_server_and_stops_it_with_the_command(monkeypatch, tmp_path, seen):
+    # a stand-in llama-server: the fake server above, on the port and key it is given
+    fake = tmp_path / "llama-server"
+    fake.write_text(
+        f"#!{sys.executable}\nimport os, sys\na = sys.argv\n"
+        "if a[1:] == ['--version']: print('version: 0.6.0 (build 11552, commit 0)'); sys.exit()\n"
+        "assert a[a.index('-hf') + 1] == 'LiquidAI/d1-3B-GGUF:Q8_0'\n"
+        "os.environ['LAYA_PORT'] = a[a.index('--port') + 1]\n"
+        "os.environ['LAYA_API_KEY'] = a[a.index('--api-key') + 1]\n" + FAKE_SERVE + "main()\n"
+    )
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    model = local.d1(ready_seconds=20)
+    try:
+        assert asyncio.run(model.decide(question(seen))).move == "keep"
+    finally:
+        model.process.stdin.close()  # as when the command exits
+        model.process.wait(timeout=5)
+    with pytest.raises(httpx.ConnectError):  # the server went with it
+        httpx.get(model._url.removesuffix("/v1/systemone") + "/health", trust_env=False)
+
+
+def test_d1_says_when_llama_server_is_too_old(monkeypatch, tmp_path):
+    fake = tmp_path / "llama-server"
+    fake.write_text(f"#!{sys.executable}\nprint('version: 0.6.0 (build 11429, commit 0)')\n")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
+    with pytest.raises(apis.MissingKey, match="build 11483 or newer; .* is build 11429"):
+        local.d1()

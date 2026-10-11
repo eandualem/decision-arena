@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import contextlib
 import json
+import shutil
 import threading
 import time
 import webbrowser
@@ -34,9 +35,16 @@ PLAYERS: dict[str, Callable[[], Model]] = {
     "openai": apis.openai,
     "perplexity": apis.perplexity,
     "laya": local.laya,
+    "d1": local.d1,
     "clef": apis.clef,
     "microsoft": apis.microsoft,
     "liquid": apis.liquid,
+}
+
+# Models on this computer: each checks itself as it starts, with its own first question.
+LOCAL = {
+    "laya": lambda: local.engine_python() is not None,
+    "d1": lambda: shutil.which("llama-server") is not None,
 }
 
 # A question every model is asked once at the start, so a key that does not work stops the
@@ -118,11 +126,12 @@ def load_env() -> None:
 
 
 def available() -> list[str]:
-    """The players that can run here: their keys are set, or (Laya) its engine is installed."""
+    """The players that can run here: their keys are set, or, on this computer, their
+    engine is installed."""
     names = []
     for name, make in PLAYERS.items():
-        if name == "laya":
-            if local.engine_python() is not None:
+        if name in LOCAL:
+            if LOCAL[name]():
                 names.append(name)
             continue
         try:
@@ -135,8 +144,8 @@ def available() -> list[str]:
 
 async def check(names: list[str]) -> list[str]:
     """Ask each named API model the probe question at once (on its own client, as the race's
-    run in another event loop); say what failed for each one that did. Laya checks itself
-    as it starts."""
+    run in another event loop); say what failed for each one that did. Models on this
+    computer check themselves as they start."""
 
     async def one(name: str) -> str | None:
         model = PLAYERS[name]()
@@ -151,7 +160,7 @@ async def check(names: list[str]) -> list[str]:
                 await close()
         return None
 
-    found = await asyncio.gather(*(one(n) for n in names if n not in ("bot", "laya")))
+    found = await asyncio.gather(*(one(n) for n in names if n != "bot" and n not in LOCAL))
     return [f for f in found if f]
 
 
