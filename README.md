@@ -24,12 +24,17 @@ fair.*
 
 ## Run it
 
-You need [uv](https://docs.astral.sh/uv/) and a key for at least one model.
+You need [uv](https://docs.astral.sh/uv/). No key is needed to start: Laya, a
+decision model, runs on your own computer.
 
 ```bash
-cp .env.example .env      # then fill in the keys you have
-uv run decision-arena
+uv tool install 'laya[serve]'   # Laya's engine, once; its model (about 850 MB) downloads on first start
+uv run decision-arena           # Laya races a built-in bot
 ```
+
+To race more models, copy `.env.example` to `.env` and fill in the keys you have:
+every model with a key joins the race. With no key and no Laya, four built-in bots
+race, so you can still see the game.
 
 The page opens in your browser. Press Space to start a race, D to show or hide
 the decision panel, and C to switch camera.

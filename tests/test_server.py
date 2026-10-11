@@ -122,3 +122,14 @@ def test_a_key_that_does_not_work_stops_the_command_and_says_which(monkeypatch, 
     said = capsys.readouterr().out
     assert "Rejected did not answer (HTTP 401" in said and "Check REJECTED_API_KEY in .env" in said
     assert "Fake" not in said
+
+
+def test_with_no_model_to_race_it_says_why_bots_race(monkeypatch, capsys):
+    from decision_arena import server
+
+    monkeypatch.setattr(server, "available", lambda: [])
+    monkeypatch.setattr(server.uvicorn.Server, "run", lambda self: None)
+    server.main(["--no-browser"])
+    out = capsys.readouterr().out
+    assert "No model has a key set, so four built-in bots race." in out
+    assert "?runners=4" in out
