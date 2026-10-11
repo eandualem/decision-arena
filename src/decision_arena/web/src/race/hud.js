@@ -145,7 +145,7 @@ export class Hud {
       rec.races++;
       rec.places[r.place - 1] = (rec.places[r.place - 1] || 0) + 1;
       rec.coins += r.coins;
-      rec.time += r.run.t;
+      rec.time += r.status === 'caught' ? r.outAt : this.race.t;   // on the track until out, crashes included
       this.records.set(r.name, rec);
     }
     const n = this.race.runners.length;
