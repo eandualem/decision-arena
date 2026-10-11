@@ -38,13 +38,13 @@ const HOLD = 1.1, RUN = 3.0, WAVE = 3.0, CRUMB = 0.5;
 const REACH = SLAB + (HOLD + RUN) / 2 + 0.05;   // nothing further than this behind the edge still stands
 
 // ------------------------------------------------------------------ where the ground breaks
-const fract = (x) => x - Math.floor(x);
-/** A hash in [0, 1) of two numbers, the same as the shader's caHash. */
+/** A hash in [0, 1) of two whole numbers: in 32-bit integers, so it is exactly the shader's caHash. */
 function hash(x, y) {
-  let a = fract(x * 0.1031), b = fract(y * 0.1031), c = a;
-  const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33);
-  a += d; b += d; c += d;
-  return fract((a + b) * c);
+  let h = Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  h ^= h >>> 16;
+  return (h >>> 8) / 16777216;
 }
 const ease = (f) => f * f * (3 - 2 * f);
 function noise2(x, y) {
@@ -74,7 +74,14 @@ export function breakAt(x, z, yard) {
 const BREAK_GLSL = /* glsl */`
 #ifdef COLLAPSE_EDGE
 uniform vec2 uCollapse;
-float caHash( vec2 p ) { vec3 p3 = fract( vec3( p.xyx ) * 0.1031 ); p3 += dot( p3, p3.yzx + 33.33 ); return fract( ( p3.x + p3.y ) * p3.z ); }
+float caHash( vec2 p ) {
+	uvec2 q = uvec2( ivec2( p ) );
+	uint h = q.x * 0x27d4eb2du ^ q.y * 0x165667b1u;
+	h = ( h ^ ( h >> 15 ) ) * 0x85ebca6bu;
+	h = ( h ^ ( h >> 13 ) ) * 0xc2b2ae35u;
+	h ^= h >> 16;
+	return float( h >> 8 ) / 16777216.0;
+}
 float caNoise( vec2 p ) {
 	vec2 i = floor( p ), f = p - i, u = f * f * ( 3.0 - 2.0 * f );
 	return mix( mix( caHash( i ), caHash( i + vec2( 1.0, 0.0 ) ), u.x ), mix( caHash( i + vec2( 0.0, 1.0 ) ), caHash( i + vec2( 1.0 ) ), u.x ), u.y );
@@ -108,6 +115,23 @@ const BREAK_TEST = /* glsl */`
 }
 const edgeUniform = { value: new THREE.Vector2(1e6, 1e6) };
 function edgeCompile(shader) { applyCurve(shader); shader.uniforms.uCollapse = edgeUniform; }
+/** Shadows break the same way: three.js casts them with its own depth materials, which take a material's clipping
+ *  planes but nothing else, so a depth material carrying `plane` runs the test too. */
+function edgeShadows(plane) {
+  for (const D of [THREE.MeshDepthMaterial.prototype, THREE.MeshDistanceMaterial.prototype]) {
+    if (D.__collapseEdge) continue;
+    D.__collapseEdge = true;
+    const before = D.onBeforeCompile, cuts = (m) => !!m.clippingPlanes && m.clippingPlanes.includes(plane);
+    D.customProgramCacheKey = function () { return before.toString() + (cuts(this) ? 'collapse-edge' : ''); };
+    D.onBeforeCompile = function (shader, renderer) {
+      before.call(this, shader, renderer);
+      if (!cuts(this)) return;
+      shader.uniforms.uCollapse = edgeUniform;
+      shader.fragmentShader = '#define COLLAPSE_EDGE\n' + shader.fragmentShader;
+    };
+  }
+}
+
 /** Let the ground break raggedly in this material (it must also have the collapse's clipping plane). */
 function edged(m) {
   if (m.onBeforeCompile === edgeCompile) return;
@@ -375,6 +399,7 @@ export class Collapse {
   start() {
     const ctx = this.ctx, scene = ctx.scene, env = ctx.env, vis = ctx.level.vis;
     ctx.renderer.localClippingEnabled = true;
+    edgeShadows(this.plane);
     const planes = this.planes;
     const clip = (o) => {
       if (!o.material) return;
