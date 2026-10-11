@@ -1,6 +1,8 @@
 import asyncio
 import os
+import subprocess
 import sys
+import time
 
 import httpx
 import pytest
@@ -120,3 +122,21 @@ def test_d1_says_when_llama_server_is_too_old(monkeypatch, tmp_path):
     monkeypatch.setenv("PATH", f"{tmp_path}{os.pathsep}{os.environ['PATH']}")
     with pytest.raises(apis.MissingKey, match="build 11483 or newer; .* is build 11429"):
         local.d1()
+
+
+def test_closing_the_pipe_kills_a_llama_server_that_ignores_being_asked_to_stop(tmp_path):
+    pid = tmp_path / "pid"
+    stubborn = (
+        "import os, signal, sys, time\n"
+        "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+        f"open({str(pid)!r}, 'w').write(str(os.getpid()))\n"
+        "time.sleep(60)\n"
+    )
+    watcher = subprocess.Popen(
+        [sys.executable, "-c", local.WATCH, sys.executable, "-c", stubborn], stdin=subprocess.PIPE
+    )
+    while not pid.exists() or not pid.read_text():
+        time.sleep(0.05)
+    local._stop(watcher)
+    with pytest.raises(ProcessLookupError):  # the server is gone, not just its watcher
+        os.kill(int(pid.read_text()), 0)

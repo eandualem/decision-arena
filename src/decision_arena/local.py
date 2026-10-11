@@ -42,11 +42,18 @@ LAUNCH = (
     "main()\n"
 )
 # The same for llama-server, which cannot watch the pipe itself: this stops it when the pipe
-# closes, and exits when it does.
+# closes (killing it if it hasn't stopped in 5 s), and exits when it does.
 WATCH = (
     "import subprocess, sys, threading\n"
     "server = subprocess.Popen(sys.argv[1:])\n"
-    "threading.Thread(target=lambda: (sys.stdin.read(), server.terminate()), daemon=True).start()\n"
+    "def stop():\n"
+    "    sys.stdin.read()\n"
+    "    server.terminate()\n"
+    "    try:\n"
+    "        server.wait(5)\n"
+    "    except subprocess.TimeoutExpired:\n"
+    "        server.kill()\n"
+    "threading.Thread(target=stop, daemon=True).start()\n"
     "sys.exit(server.wait())\n"
 )
 # The first answer pays the warm-up; a race's first question should not.
@@ -120,12 +127,12 @@ def d1(ready_seconds: float = 1800.0) -> DecisionAPI:
 
 
 def _stop(process: subprocess.Popen[bytes]) -> None:
-    """Close the pipe, which stops the server (and llama-server behind its watcher); kill it
-    only if it does not stop."""
+    """Close the pipe, which stops the server (and llama-server behind its watcher, which
+    kills it after 5 s); kill it only if it does not stop."""
     with contextlib.suppress(OSError):
         process.stdin.close()  # type: ignore[union-attr]
     try:
-        process.wait(timeout=5)
+        process.wait(timeout=10)
     except subprocess.TimeoutExpired:
         process.kill()
 
