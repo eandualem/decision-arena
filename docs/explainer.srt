@@ -1,0 +1,279 @@
+1
+00:00:00,300 --> 00:00:03,804
+Each runner here is driven by a different decision model.
+
+2
+00:00:03,804 --> 00:00:07,493
+Here's exactly what each model is asked, what it can answer,
+
+3
+00:00:07,493 --> 00:00:09,030
+and why the race is fair.
+
+4
+00:00:09,180 --> 00:00:11,610
+First, what does a decision model do?
+
+5
+00:00:11,760 --> 00:00:13,263
+It doesn't write text.
+
+6
+00:00:13,263 --> 00:00:18,796
+It gets a described situation and described options, and answers with one choice,
+
+7
+00:00:18,796 --> 00:00:20,640
+and a probability for each.
+
+8
+00:00:20,790 --> 00:00:26,945
+Here, every model chooses from the same five moves: left, right, jump, roll,
+
+9
+00:00:26,945 --> 00:00:28,160
+and keep going.
+
+10
+00:00:28,310 --> 00:00:29,800
+And there are no turns.
+
+11
+00:00:29,950 --> 00:00:32,554
+Each runner keeps one question in flight.
+
+12
+00:00:32,554 --> 00:00:36,810
+The moment the answer arrives, the move is made, and it asks again.
+
+13
+00:00:36,960 --> 00:00:39,966
+The world keeps moving while a model thinks.
+
+14
+00:00:39,966 --> 00:00:45,567
+Laya answers in about a quarter of a second, making about four decisions a second.
+
+15
+00:00:45,567 --> 00:00:49,529
+OpenAI takes about half a second, and makes just over one.
+
+16
+00:00:49,529 --> 00:00:51,510
+Speed is part of the contest.
+
+17
+00:00:51,660 --> 00:00:53,210
+So where do the questions go?
+
+18
+00:00:53,350 --> 00:00:56,412
+The game runs in your browser and keeps the clock.
+
+19
+00:00:56,412 --> 00:01:00,760
+Over one WebSocket, it talks to a small Python server on your computer.
+
+20
+00:01:00,910 --> 00:01:06,097
+The server turns what each runner sees into text, and asks its model:
+
+21
+00:01:06,097 --> 00:01:12,111
+OpenAI's GPT-6 Luna, Jev, Perplexity or Cloudflare's Clef in the cloud, or Laya,
+
+22
+00:01:12,111 --> 00:01:13,840
+right on your computer.
+
+23
+00:01:13,990 --> 00:01:18,110
+The API keys stay in that server, and never reach the page.
+
+24
+00:01:18,260 --> 00:01:19,634
+Now, the heart of it.
+
+25
+00:01:19,634 --> 00:01:23,625
+Here's a real question, sent to Perplexity in the right lane,
+
+26
+00:01:23,625 --> 00:01:25,850
+at the start of a five-model race.
+
+27
+00:01:26,000 --> 00:01:30,580
+First, its runner: right lane, running, 15 meters a second.
+
+28
+00:01:30,730 --> 00:01:35,860
+Its answers take about half a second, so its move lands about 8 meters further on.
+
+29
+00:01:36,010 --> 00:01:41,077
+Then the lanes, its own first: a low barrier 12 meters ahead,
+
+30
+00:01:41,077 --> 00:01:46,310
+reached in 0.79 seconds, 0.23 seconds after its answer arrives.
+
+31
+00:01:46,470 --> 00:01:50,064
+Then the other two lanes, each up to 100 meters ahead,
+
+32
+00:01:50,064 --> 00:01:52,260
+with up to four obstacles a lane.
+
+33
+00:01:52,410 --> 00:01:53,886
+Trains get special care.
+
+34
+00:01:53,886 --> 00:01:58,068
+A ramp is told together with the train it leads onto, like this one,
+
+35
+00:01:58,068 --> 00:02:00,036
+up onto a standing train's roof.
+
+36
+00:02:00,036 --> 00:02:05,079
+And a train right beside a runner says that moving into that lane now would bounce
+
+37
+00:02:05,079 --> 00:02:05,510
+it off.
+
+38
+00:02:05,660 --> 00:02:10,755
+Then its place, third of five, and every other runner: its lane, its gap,
+
+39
+00:02:10,755 --> 00:02:12,290
+and whether it's down.
+
+40
+00:02:12,430 --> 00:02:16,230
+And last, the ground breaking away, 40 meters behind.
+
+41
+00:02:16,390 --> 00:02:20,217
+The instructions are the same for everyone, with the game's timings,
+
+42
+00:02:20,217 --> 00:02:21,680
+measured from its physics.
+
+43
+00:02:21,820 --> 00:02:27,567
+A jump clears a low barrier reached 0.1 to 0.55 seconds after jumping.
+
+44
+00:02:27,567 --> 00:02:31,590
+A roll gets under a high one within 0.64 seconds.
+
+45
+00:02:31,740 --> 00:02:35,580
+It gives facts and rules, never which move to make.
+
+46
+00:02:35,730 --> 00:02:41,601
+If Perplexity answers in its usual time, it jumps 0.23 seconds before the barrier:
+
+47
+00:02:41,601 --> 00:02:42,890
+inside the window.
+
+48
+00:02:43,040 --> 00:02:49,401
+This time it answered jump, 99% sure, in 0.66 seconds, a little slower than usual.
+
+49
+00:02:49,401 --> 00:02:54,830
+So it jumped 0.13 seconds before the barrier, still inside the window,
+
+50
+00:02:54,830 --> 00:02:56,382
+near its early edge.
+
+51
+00:02:56,382 --> 00:03:00,260
+That's why each model is told its own answer time.
+
+52
+00:03:00,410 --> 00:03:06,315
+All of it goes out as a short JSON request: the System One shape for Jev, Perplexity,
+
+53
+00:03:06,315 --> 00:03:09,302
+Clef and Laya, or OpenAI's Decisions shape.
+
+54
+00:03:09,302 --> 00:03:10,830
+Same words either way.
+
+55
+00:03:10,970 --> 00:03:14,511
+The answer is one move, with a probability for each.
+
+56
+00:03:14,511 --> 00:03:19,890
+Press D to watch them live, with each model's latency and decisions per second,
+
+57
+00:03:19,890 --> 00:03:22,410
+and its record over the races so far.
+
+58
+00:03:22,560 --> 00:03:23,990
+So, is it fair?
+
+59
+00:03:24,150 --> 00:03:27,880
+Every runner gets the same track, and every race a new one.
+
+60
+00:03:28,030 --> 00:03:32,248
+Start slots rotate one place each race, so over five races,
+
+61
+00:03:32,248 --> 00:03:35,680
+each of five models starts once from every slot.
+
+62
+00:03:35,820 --> 00:03:39,065
+Every model gets the same code and the same words.
+
+63
+00:03:39,065 --> 00:03:41,985
+Only its own position and answer time differ.
+
+64
+00:03:41,985 --> 00:03:44,970
+And the five moves work the same for everyone.
+
+65
+00:03:45,120 --> 00:03:48,606
+Before a race, every model must answer one question.
+
+66
+00:03:48,606 --> 00:03:52,360
+If one can't, nothing starts, and you're told which one.
+
+67
+00:03:52,510 --> 00:03:53,437
+Want to check?
+
+68
+00:03:53,437 --> 00:03:57,809
+Three files show all of it, and the tests run on recorded answers,
+
+69
+00:03:57,809 --> 00:03:59,199
+without a single key.
+
+70
+00:03:59,199 --> 00:04:01,650
+Then pick your models, and race them.
