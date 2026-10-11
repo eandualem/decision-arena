@@ -88,35 +88,43 @@ on screen.
 
 Each time, a model gets one question: a description of what its runner sees,
 instructions, and five described moves. Here is a real question from a
-five-model race, sent to Perplexity as it ran in the right lane:
+five-model race, sent to Perplexity as it ran in the right lane at the start:
 
 **State**
 
 > A race on three train-track lanes, left, middle and right, all running
-> forward. You are in the right lane, running, at 14 m/s. Your answers take
-> about 0.54 s, so your move is made about 8 m further on. Your last move was
-> keep. You are 3rd of 5. Jev is level with you in the middle lane. OpenAI is
-> level with you in the left lane. Clef is 4 m behind you in the middle lane.
-> Laya is 4 m behind you in the left lane. The ground is breaking away 40 m
-> behind you. Your lane (right): a low barrier (jump over it) 14 m ahead,
-> reached in 0.99 s (0.45 s after your answer). Left lane: a high barrier (roll
-> under it) 15 m ahead, reached in 1.02 s (0.48 s after your answer); then a
-> ramp up onto a train roof (run up it) 59 m ahead, reached in 4.05 s (3.51 s
-> after your answer). Middle lane: a low barrier (jump over it) 16 m ahead,
-> reached in 1.09 s (0.55 s after your answer).
+> forward. You are in the right lane, running, at 15 m/s. Your answers take
+> about 0.56 s, so your move is made about 8 m further on. Your last move was
+> keep. Your lane (right): a low barrier (jump over it) 12 m ahead, reached in
+> 0.79 s (0.23 s after your answer). Left lane: a low barrier (jump over it) 12
+> m ahead, reached in 0.79 s (0.23 s after your answer); then a ramp 59 m ahead,
+> reached in 4.06 s (3.50 s after your answer), up onto a standing train's roof,
+> 26 m long. Middle lane: a low barrier (jump over it) 12 m ahead, reached in
+> 0.79 s (0.23 s after your answer); then a standing train, 12 m long, 70 m
+> ahead, reached in 4.79 s (4.23 s after your answer). You are 3rd of 5. Jev is
+> level with you in the middle lane. OpenAI is level with you in the left lane.
+> Laya is 4 m behind you in the middle lane. Clef is 4 m behind you in the left
+> lane. The ground is breaking away 40 m behind you.
 
 **Instructions** (the same in every question)
 
 > Choose this runner's next move. Crashing into a barrier or the front of a
-> train knocks it down and costs ground; the ground breaking away behind it
-> ends its race. Your move is made when your answer arrives, so allow for your
-> answer time. A lane change takes 0.13 s. A jump lasts 0.61 s and clears a low
-> barrier you reach 0.10 to 0.55 s after jumping, or a buffer stop you reach
-> 0.14 to 0.50 s after: jump too early and you land before it. A roll gets you
-> under a high barrier you reach within 0.64 s of rolling: roll too early and
-> you stand up before it. Trains are too high to jump onto except up a ramp.
-> Running into another runner's back trips you, changing lanes into one bounces
-> you back, and jumping takes you over one.
+> train knocks it down and costs ground; the ground breaking away behind it ends
+> its race. Your move is made when your answer arrives, so allow for your answer
+> time. A lane change takes 0.13 s. A jump lasts 0.61 s and clears a low barrier
+> you reach 0.10 to 0.55 s after jumping, or a buffer stop you reach 0.14 to
+> 0.50 s after: jump too early and you land before it. A roll gets you under a
+> high barrier you reach within 0.64 s of rolling: roll too early and you stand
+> up before it. Changing lanes into the side of a train or barrier bounces you
+> back and costs speed. Trains are too high to jump onto, except with spring
+> shoes; a ramp runs straight up onto its train's roof. On a roof, ground
+> obstacles pass below you; where the roof ends you drop to the ground, unless
+> the next roof starts within 3 m. Running into another runner's back trips you,
+> changing lanes into one bounces you back, and jumping takes you over one.
+
+Perplexity answered `jump`, 99% sure, in 0.66 s, a little slower than its usual
+0.56 s. So it reached the barrier 0.13 s after jumping, inside the 0.10 to 0.55 s
+window.
 
 **Moves**
 
@@ -130,21 +138,27 @@ five-model race, sent to Perplexity as it ran in the right lane:
 
 ### What goes into the state
 
-- **Your runner:** its lane; what it is doing (running, changing lanes, in the
-  air and when it lands, rolling and when it stands up, on a train roof,
-  wearing spring shoes); its speed; and its last move.
+In this order:
+
+- **Your runner:** its lane; what it is doing (running, changing lanes from
+  which lane to which, in the air and when it lands, rolling and when it stands
+  up, on a train roof, wearing spring shoes, protected after a crash); its
+  speed; and its last move.
 - **Your answer time:** the mean of its model's last five answer times, and how
   far the runner travels in that time. It's left out of the first question of
   a race, because there is no answer time yet.
+- **The lanes:** your own lane first, then the other two, each over the next
+  100 m, up to four obstacles a lane, nearest first. For each obstacle you get
+  its distance, when you reach it at your current speed (a train coming at you
+  closes at both speeds), and how long after your answer arrives that is. A
+  ramp is told together with the train whose roof it leads onto. A train
+  beside you says how far it goes on, and, in the next lane, that moving into
+  that lane now bounces you off it. On a roof, barriers are marked as on the
+  ground below.
 - **The other runners:** place, and every other runner still racing, nearest
   first, with its lane, its gap, and whether it is down after a crash.
 - **The collapse:** how far behind the ground is breaking away, and whether it
   is gaining.
-- **The lanes:** your own lane first, then the other two. Each lists the next
-  60 m in order. For each obstacle you get its distance and when you reach it
-  at your current speed; a train coming at you closes at both speeds. You also
-  get how long after your answer arrives that is. A train beside or under you
-  says how far it goes on.
 
 The text gives facts and the game's rules. It never says which move to make.
 The jump and roll windows come from the game itself: they were measured by
@@ -198,7 +212,11 @@ same text, with the moves as a list:
 (The example lists two of the five choices; every request sends all five.)
 
 Each model answers with its choice and a probability for each move. The
-decision panel shows both, with the model's latency and decisions per second.
+decision panel shows both, with the model's latency and decisions per second,
+and its record over the races since the page loaded: how often it finished
+first, second and third, and coins a minute on the track. The cards are ordered
+by that record. Coins count per minute because a race stops when one runner is
+left; models aren't told where coins are, and coins change nothing in the race.
 An answer that isn't one of the five moves, or whose probabilities don't add
 up, is shown as an error, and the runner asks again half a second later.
 
