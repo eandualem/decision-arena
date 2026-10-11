@@ -14,7 +14,6 @@ export const RACE = {
   minGap: 6,            // ...shrinking to this...
   closeRate: 0.12,      // ...by this many metres per second
   collapsePace: 0.96,   // the edge's own speed, as a fraction of the base speed
-  reach: -0.5,          // a runner this far behind the edge has lost the ground under it
   gridRow: 3.6,         // metres between grid rows
   countdown: 0.8,       // seconds per 3-2-1 step
   bumpCooldown: 0.5,    // seconds after a bump before the same runner can bump again
@@ -223,7 +222,7 @@ export class Race {
     const gap = Math.max(RACE.minGap, RACE.startGap - this.t * RACE.closeRate);
     if (lead && C.z > lead.b.z + gap) { C.speed += (C.z - (lead.b.z + gap)) / dt; C.z = lead.b.z + gap; }
     for (const r of this.runners) {
-      if (r.alive && r.b.z >= C.z - RACE.reach) {
+      if (r.alive && this.ground.gone(r.b.x, r.b.z, C.z)) {   // the ground under it broke away
         r.caught();
         this.camera.shake(0.35);
       }

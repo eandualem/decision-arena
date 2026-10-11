@@ -761,17 +761,21 @@ Scenery.prototype.warehouse = function (B, s, uF, zF, zN, R, dock = false) {
 
 // Decision Arena: while a chunk is built, note where each building's geometry lies in the builders and the
 // space it takes, so the collapse can take a building away whole (see race/collapse.js).
-for (const name of ['building', 'farBuilding', 'warehouse']) {
+for (const name of ['building', 'farBuilding', 'warehouse', 'container']) {
   const fn = Scenery.prototype[name];
   Scenery.prototype[name] = function (B, ...rest) {
     if (!this.blocks) return fn.call(this, B, ...rest);
-    const a = { o: [B.o.nv, B.o.ni], c: [B.c.nv, B.c.ni], g: [B.g.nv, B.g.ni] };
+    const at = () => ({ o: [B.o.nv, B.o.ni], n: [B.n.nv, B.n.ni], c: [B.c.nv, B.c.ni], g: [B.g.nv, B.g.ni] });
+    const a = at();
     const r = fn.call(this, B, ...rest);
-    const p = B.o.pos, box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
-    for (let i = a.o[0] * 3; i < B.o.nv * 3; i += 3) {
-      for (let k = 0; k < 3; k++) { box[k] = Math.min(box[k], p[i + k]); box[k + 3] = Math.max(box[k + 3], p[i + k]); }
+    const box = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    for (const key of ['o', 'n']) {
+      const p = B[key].pos;
+      for (let i = a[key][0] * 3; i < B[key].nv * 3; i += 3) {
+        for (let k = 0; k < 3; k++) { box[k] = Math.min(box[k], p[i + k]); box[k + 3] = Math.max(box[k + 3], p[i + k]); }
+      }
     }
-    this.blocks.push({ a, b: { o: [B.o.nv, B.o.ni], c: [B.c.nv, B.c.ni], g: [B.g.nv, B.g.ni] }, box, taken: false });
+    this.blocks.push({ a, b: at(), box, taken: false });
     return r;
   };
 }

@@ -1,18 +1,21 @@
 // Race camera. Before the race it faces the start grid. During the race it holds one steady view: from behind
-// and to the right, 45 degrees off the track, looking along it, so you see every runner, what is coming at them
-// and the ground breaking away behind them. It stays close enough to read each runner, pulling back only as far
-// as the pack needs. The camera stands outside the track, so the scenery on the near side is cut away and open
-// ground takes its place; the far side's street is the backdrop. C switches to a view from straight behind.
+// and to the right, 45 degrees off the track, looking along it, so you see every runner still in the race and
+// what is coming at them, as close as that allows: it moves in as runners go out. The ground breaking away
+// behind them joins the frame only when it is about to take someone. The camera stands outside the track, so the
+// scenery on the near side is cut away and open ground takes its place; the far side's street is the backdrop.
+// C switches to a view from straight behind.
 import * as THREE from 'three';
 import { clamp, lerp, damp } from '../core/utils.js';
+import { YARD } from './collapse.js';
 
 const EDGE = 4.8;             // the corridor's right edge: scenery starts here
 const CORRIDOR = 5.35;        // where the track's gravel shoulder ends
 const AZIMUTH = Math.PI / 4;  // 45 degrees between looking from behind and looking from the side
 const ELEVATION = 0.78;       // camera height per metre of horizontal distance (about 38 degrees down)
 const FILL = 0.88;            // the pack fills at most this much of the screen
-const NEAR = 13, FAR = 34;    // metres: never closer than this, never further than this
-const YARD = 11.5;            // the rail yard beyond the open ground: a second set of tracks, centred this far right
+const NEAR = 9, FAR = 40;     // metres: never closer than this, never further than this
+const AHEAD = 22;             // metres of track ahead of the leader kept in view
+const CLOSE = 7;              // the edge joins the frame once it is this close to the last runner
 const GROUND_CUT = -0.13;     // the open ground beside the track, just under the track's own shoulder
 
 /** Open ground: gravel and packed earth, one image every 4 m. */
@@ -38,6 +41,28 @@ function gravelTexture() {
   return t;
 }
 
+const RAIL_POST = 2.5;         // metres between the railing's posts
+
+/** A low steel railing along the open ground, 400 m of it, broken off at the collapse like the rest. */
+function railing(ground) {
+  const mat = new THREE.MeshLambertMaterial({ color: 0x8d949c });
+  mat.clippingPlanes = [ground.plane];
+  ground.edged(mat);
+  const n = 160, posts = new THREE.InstancedMesh(new THREE.BoxGeometry(0.08, 1.1, 0.08), mat, n + 1);
+  for (let i = 0; i <= n; i++) posts.setMatrixAt(i, new THREE.Matrix4().makeTranslation(0, 0.55, (i - n / 2) * RAIL_POST));
+  const g = new THREE.Group();
+  g.add(posts);
+  for (const y of [0.55, 1.08]) {
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, n * RAIL_POST), mat);
+    bar.position.y = y;
+    g.add(bar);
+  }
+  g.position.x = CORRIDOR + 0.3;
+  g.traverse((o) => { o.frustumCulled = false; o.castShadow = true; });
+  g.visible = false;
+  return g;
+}
+
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 export class PackCamera {
@@ -47,7 +72,6 @@ export class PackCamera {
     this.cam = ctx.camera;
     this.mode = 'grid';
     this.view = ctx.params?.get?.('view') === 'chase' ? 'chase' : 'angle';
-    this._fit = new THREE.PerspectiveCamera(50, 1, 0.1, 500);
     this._v = new THREE.Vector3();
     this._off = new THREE.Vector3(Math.sin(AZIMUTH), ELEVATION, Math.cos(AZIMUTH)).normalize();
     this.pos = new THREE.Vector3(0, 2, -8);
@@ -65,6 +89,7 @@ export class PackCamera {
     race.ground.planes.push(this.cut);
     const apron = new THREE.Mesh(new THREE.PlaneGeometry(400, 1200), new THREE.MeshLambertMaterial({ map: gravelTexture() }));
     apron.material.clippingPlanes = [race.ground.plane];
+    race.ground.edged(apron.material);
     apron.rotation.x = -Math.PI / 2;
     apron.position.set(EDGE + 200, GROUND_CUT, 0);
     apron.receiveShadow = true;
@@ -76,12 +101,16 @@ export class PackCamera {
     const yardMat = ctx.env.mats.o.clone();
     yardMat.clippingPlanes = [race.ground.plane, new THREE.Plane(new THREE.Vector3(1, 0, 0), -(CORRIDOR + 0.6))];
     yardMat.clipShadows = true;
+    race.ground.edged(yardMat);
     this.yard = new THREE.Mesh(ctx.env.track.geometry, yardMat);
     this.yard.matrixAutoUpdate = false;
     this.yard.frustumCulled = false;
     this.yard.receiveShadow = true;
     this.yard.visible = false;
     ctx.scene.add(this.yard);
+    // and between them a low railing: the runners keep to their own track
+    this.railing = railing(race.ground);
+    ctx.scene.add(this.railing);
   }
 
   toGrid() {
@@ -151,46 +180,75 @@ export class PackCamera {
     out.fov = 62 + Math.min(10, s * 0.35);
   }
 
-  /** From behind and to the right, 45 degrees off the track: the pack, the track ahead and the collapse. */
+  /** From behind and to the right, 45 degrees off the track: every runner still in it and the track ahead of
+   *  them, centred on screen. The ground breaking away behind joins the frame only once it is close to the last
+   *  runner. */
   _anglePose(raw, out) {
-    const p = this._pack();
-    // the runners and the ground breaking away behind them, whenever it is in reach of the last one
-    const C = this.race.collapse;
-    const near = C.z - p.rear < 26;
-    const rear = near ? Math.max(p.rear, C.z + 4) : p.rear;
-    if (this._reset) { this.cz = (p.lead + rear) / 2; this.dist = NEAR; this.my = p.y; this.lx = -3; this.fovFit = undefined; }
+    const p = this._pack(), C = this.race.collapse;
     const w = this.race.state === 'gameover' && this.race.winner;
-    this.cz = damp(this.cz, w ? w.b.z : (p.lead + rear) / 2, 4, raw);
-    this.my = damp(this.my, (p.bottom + p.top) / 2, 3, raw);
-    // aim at the middle of it all, a little toward the far side, so the track runs through the middle of the
-    // screen with what is ahead of the leaders in view; at the finish, at the winner
-    this.lx = damp(this.lx ?? -3, w ? w.b.x - 0.5 : -3, 2, raw);
-    out.look.set(this.lx, this.my + 1, this.cz - (w ? 4 : 1));   // the winner below the title
-    // step back until every runner's feet and head, and the edge when it is close, fit on screen
-    const F = this._fit, fov = Math.min(80, 50 + this._narrow() * 6);   // a little wider on a narrow screen
-    F.aspect = this.cam.aspect || 1.6;
-    F.fov = fov;
-    F.updateProjectionMatrix();
-    let m = 0.01;
-    let dist = this.dist;
-    for (let k = 0; k < 4; k++) {
-      F.position.copy(out.look).addScaledVector(this._off, dist);
-      F.lookAt(out.look);
-      F.updateMatrixWorld();
-      m = 0.01;
-      const fit = (x, y, z) => { const v = this._v.set(x, y, z).project(F); if (v.z < 1) m = Math.max(m, Math.abs(v.x), Math.abs(v.y)); else m = 9; };
-      for (const r of this._alive()) { fit(r.b.x, r.b.y, r.b.z); fit(r.b.x, r.b.y + 2.2, r.b.z); }
-      // and, once the edge is close, the ground breaking away just behind it
-      if (near) { const b = C.z + (w ? 1 : 4); fit(-2.6, 0, b); fit(2.6, 0, b); }
-      dist = clamp(dist * clamp(m / FILL, 0.8, 1.6), NEAR, FAR);
+    const runners = w ? [w] : this._alive();
+    const pts = this._pts || (this._pts = []);
+    let n = 0;
+    const add = (x, y, z) => { const v = pts[n] || (pts[n] = new THREE.Vector3()); v.set(x, y, z); n++; };
+    for (const r of runners) { add(r.b.x, r.b.y, r.b.z); add(r.b.x, r.b.y + 2.8, r.b.z); }   // feet, and head with its name tag
+    if (w) {
+      // at the finish: just the winner, between the title above and the button below
+      add(w.b.x, w.b.y + 6, w.b.z); add(w.b.x, w.b.y - 0.8, w.b.z);
+    } else {
+      // what is coming at them: the track ahead of the leader, all three lanes
+      add(-2.6, 0, p.lead - AHEAD); add(2.6, 0, p.lead - AHEAD);
+      // and the edge, once it is about to take someone
+      if (C.z - p.rear < CLOSE) { add(-2.6, 0, C.z + 1.5); add(2.6, 0, C.z + 1.5); }
     }
-    // widen at once, tighten gently
-    this.dist = dist > this.dist ? dist : damp(this.dist, dist, 1.2, raw);
-    out.pos.copy(out.look).addScaledVector(this._off, this.dist);
-    // when even the furthest distance cannot fit the pack (a tall, narrow screen), widen the view instead
-    const need = dist >= FAR && m > FILL ? 2 * Math.atan(Math.tan((fov * Math.PI) / 360) * (m / FILL)) * (180 / Math.PI) : fov;
-    this.fovFit = damp(this.fovFit ?? need, need, 3, raw);
-    out.fov = Math.min(95, this.fovFit);
+    pts.length = n;
+
+    // The camera looks one fixed way, so it is placed directly: as close as it can be with every point inside
+    // the frame, and centred on them (see _place). Never closer than NEAR or further than FAR from the pack;
+    // when even FAR cannot fit them (a tall, narrow screen), the view widens instead.
+    const aspect = this.cam.aspect || 1.6, base = Math.min(80, 50 + this._narrow() * 6);   // a little wider on a narrow screen
+    const c = this._c || (this._c = new THREE.Vector3());
+    let fov = base;
+    for (; ; fov = Math.min(95, fov * 1.08)) {
+      const depth = this._place(pts, Math.tan((fov * Math.PI) / 360) * FILL, aspect, c);
+      if (depth <= FAR || fov >= 95) {
+        if (depth < NEAR) c.addScaledVector(this._off, NEAR - depth);
+        break;
+      }
+    }
+    // (kept relative to the front of the frame, so it does not lag behind a running pack)
+    const front = w ? w.b.z : p.lead;
+    c.z -= front;
+    if (this._reset || !this.aim) { this.aim = c.clone(); this.fovFit = fov; }
+    const back = this._v.subVectors(c, this.aim).dot(this._off) > 0;   // backing away: quickly, so nobody leaves the frame
+    const k = back ? 7 : 2.5;
+    this.aim.set(damp(this.aim.x, c.x, k, raw), damp(this.aim.y, c.y, k, raw), damp(this.aim.z, c.z, k, raw));
+    out.pos.copy(this.aim); out.pos.z += front;
+    out.look.copy(out.pos).addScaledVector(this._off, -20);
+    this.fovFit = damp(this.fovFit, fov, fov > this.fovFit ? 7 : 2.5, raw);
+    out.fov = this.fovFit;
+  }
+
+  /** Where a camera looking along -_off, with half-angles tan `t` (vertically) and tan `t * aspect`, stands as
+   *  close as it can with every point inside its view, centred on them. Writes it to `out`; returns its depth
+   *  to the points' middle. Each point bounds the camera by a pair of planes, so this is exact, in one step. */
+  _place(pts, t, aspect, out) {
+    const D = this._D || (this._D = new THREE.Vector3()), R = this._R || (this._R = new THREE.Vector3()), U = this._U || (this._U = new THREE.Vector3());
+    D.copy(this._off).negate();
+    R.crossVectors(D, THREE.Object3D.DEFAULT_UP).normalize();
+    U.crossVectors(R, D);
+    const tx = t * aspect;
+    let lx = -Infinity, hx = Infinity, ly = -Infinity, hy = Infinity, md = 0;
+    for (const q of pts) {
+      const r = q.dot(R), u = q.dot(U), d = q.dot(D);
+      lx = Math.max(lx, r - tx * d); hx = Math.min(hx, r + tx * d);
+      ly = Math.max(ly, u - t * d); hy = Math.min(hy, u + t * d);
+      md += d;
+    }
+    md /= pts.length;
+    // the camera at a*R + b*U + e*D sees point q when |q.R - a| <= tx (q.D - e), and the same for U
+    const e = Math.min((hx - lx) / (2 * tx), (hy - ly) / (2 * t));
+    out.copy(R).multiplyScalar((lx + hx) / 2).addScaledVector(U, (ly + hy) / 2).addScaledVector(D, e);
+    return md - e;
   }
 
   /** Cut away the near side for the angled view; restore the full world otherwise. */
@@ -198,8 +256,12 @@ export class PackCamera {
     this.cut.constant = on ? EDGE : 1e6;
     this.race.ground.nearCut = on;
     this.race.ground.yardX = on ? YARD : null;
-    this.apron.visible = this.yard.visible = on;
-    if (on) this.apron.position.z = this.pos.z;
+    this.apron.visible = this.yard.visible = this.railing.visible = on;
+    if (on) {
+      // each on its own grid, so they stand still as the camera moves
+      this.apron.position.z = Math.round(this.pos.z / 4) * 4;
+      this.railing.position.z = Math.round(this.pos.z / RAIL_POST) * RAIL_POST;
+    }
     // The world normally bends down toward the horizon and sways a little. Seen from outside the track, the
     // bend makes the track curl away, so the world is flat while the cut is on (see flatten()).
     this.flat = on;

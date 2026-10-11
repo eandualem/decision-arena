@@ -1,14 +1,15 @@
-// The ground collapsing behind the race. The track and the scenery are cut cleanly at the edge (a clipping plane),
-// and what the cut takes away keeps its shape as it goes:
-//  - the track breaks off in slabs (ballast, sleepers and rails on a block of soil) that tip over the lip and
-//    fall, each at its own moment, so the edge is ragged;
+// The ground collapsing behind the race. Nothing is cut in a straight line: the ground breaks along a ragged lip
+// (breakAt, shared by the world's shaders and the code here), and what breaks away keeps its shape as it goes:
+//  - the track breaks off in slabs (ballast, sleepers and rails on a block of soil), each lane and each stretch
+//    of it at its own moment, that tip over the lip and fall;
 //  - trains, ramps and barriers stay whole: each holds until the edge passes its middle, then loses its balance,
 //    tips back over the lip until it stands almost upright, and drops;
 //  - buildings sink and lean back into the chasm in one piece;
 //  - rubble falls with them, and dust billows up from the chasm along the whole edge.
-// The broken ground shows its layers of earth on the cut face, falling away into a dark chasm. Runners are not
-// cut: one the edge reaches falls with the rest (see Runner._falling).
+// Under the lip a broken bank of earth, lumpy and leaning back, shows its layers as it falls away into a dark
+// chasm. Runners are not cut: one whose ground breaks falls with it (see Runner.caught).
 import * as THREE from 'three';
+import { applyCurve } from '../core/curve.js';
 import { GeoBuilder, lin, shade } from '../world/builder.js';
 import { BED, SLEEPER, RAIL } from '../world/track.js';
 import { LANE_WIDTH, TRACK } from '../config.js';
@@ -17,6 +18,7 @@ import { kOf } from '../world/chunks.js';
 import { CHUNK } from '../world/scenery.js';
 
 export const PIT = 40;          // how deep the chasm is
+export const YARD = 11.5;       // the rail yard the angled camera puts beyond the near side (see PackCamera)
 const GRAVITY = 22;
 const SLAB = 1.9;               // metres of track per slab: the track's own segment length (world/track.js)
 const SLAB_DEPTH = 1.7;         // soil under a slab
@@ -25,9 +27,94 @@ const ROCKS = 520;              // rubble pieces alive at once
 const SLABS = 200;              // slabs of each kind alive at once
 const DUST = { low: 450, medium: 800, high: 1200 };
 const CORRIDOR = 5.35;          // the track's corridor, out to the foot of the walls and platforms either side
-const SIDE = 180;               // how far the broken faces reach on either side
-const CUT_TOP = -0.12;          // the top of a broken face: just under the ground beside the track
-const CAP = 12;                 // metres behind the edge in which cut walls show as solid
+const LANES_END = LANE_WIDTH + BED.foot;   // where the outer lanes' beds end and the gravel shoulders begin
+const SIDE = 180;               // how far the broken bank reaches on either side
+const CUT_TOP = -0.12;          // the top of the bank: just under the ground beside the track
+const CAP = 2.2;                // metres ahead of the edge in which cut walls show as solid: as far as the lip reaches
+// How ragged the lip is. Track breaks a slab at a time: each lane runs ahead or behind by up to RUN / 2, slowly
+// along its length, and each slab by up to HOLD / 2 more. Elsewhere the lip wanders by WAVE / 2 and crumbles by
+// CRUMB / 2. (Kept gentle enough along the track that nothing breaks before the ground behind it.)
+const HOLD = 1.1, RUN = 3.0, WAVE = 3.0, CRUMB = 0.5;
+const REACH = SLAB + (HOLD + RUN) / 2 + 0.05;   // nothing further than this behind the edge still stands
+
+// ------------------------------------------------------------------ where the ground breaks
+const fract = (x) => x - Math.floor(x);
+/** A hash in [0, 1) of two numbers, the same as the shader's caHash. */
+function hash(x, y) {
+  let a = fract(x * 0.1031), b = fract(y * 0.1031), c = a;
+  const d = a * (b + 33.33) + b * (c + 33.33) + c * (a + 33.33);
+  a += d; b += d; c += d;
+  return fract((a + b) * c);
+}
+const ease = (f) => f * f * (3 - 2 * f);
+function noise2(x, y) {
+  const i = Math.floor(x), j = Math.floor(y), u = ease(x - i), v = ease(y - j);
+  const a = hash(i, j) + (hash(i + 1, j) - hash(i, j)) * u, b = hash(i, j + 1) + (hash(i + 1, j + 1) - hash(i, j + 1)) * u;
+  return a + (b - a) * v;
+}
+function noise1(t, k) { const i = Math.floor(t), u = ease(t - i); return hash(i, k) + (hash(i + 1, k) - hash(i, k)) * u; }
+
+/** Where the edge must have reached for the ground at (x, z) to break: it is gone once edge < breakAt(x, z).
+ *  `yard` is the rail yard's centre, or null. The track (and the yard's) breaks a whole slab at a time, the slabs
+ *  laneSlab and shoulderSlab build; everything else along a wandering, crumbling line. */
+export function breakAt(x, z, yard) {
+  let xr = x, id = 0;
+  if (yard !== null && x > CORRIDOR + 0.6) { xr = x - yard; id = 10; }
+  const ax = Math.abs(xr);
+  if (ax < CORRIDOR) {
+    const col = id + (ax < LANES_END ? Math.max(-1, Math.min(1, Math.floor(xr / LANE_WIDTH + 0.5))) : Math.sign(xr) * 2);
+    const sg = Math.floor((z - GRID) / SLAB), front = GRID + sg * SLAB;
+    return front - (HOLD * (hash(col, sg) - 0.5) + RUN * (noise1(front / 13, col) - 0.5));
+  }
+  return z - (WAVE * (noise2(x / 5, z / 9) - 0.5) + CRUMB * (noise2(x / 1.5 + 17, z / 2) - 0.5));
+}
+
+// The same, in the shaders of everything the collapse breaks (see edged()): three.js's clipping chunks gain a
+// test of the fragment's world position against breakAt.
+const BREAK_GLSL = /* glsl */`
+#ifdef COLLAPSE_EDGE
+uniform vec2 uCollapse;
+float caHash( vec2 p ) { vec3 p3 = fract( vec3( p.xyx ) * 0.1031 ); p3 += dot( p3, p3.yzx + 33.33 ); return fract( ( p3.x + p3.y ) * p3.z ); }
+float caNoise( vec2 p ) {
+	vec2 i = floor( p ), f = p - i, u = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( caHash( i ), caHash( i + vec2( 1.0, 0.0 ) ), u.x ), mix( caHash( i + vec2( 0.0, 1.0 ) ), caHash( i + vec2( 1.0 ) ), u.x ), u.y );
+}
+float caNoise1( float t, float k ) { float i = floor( t ), f = t - i, u = f * f * ( 3.0 - 2.0 * f ); return mix( caHash( vec2( i, k ) ), caHash( vec2( i + 1.0, k ) ), u ); }
+float caBreak( vec2 p ) {
+	float xr = p.x, id = 0.0;
+	if ( uCollapse.y < 1e5 && p.x > ${(CORRIDOR + 0.6).toFixed(3)} ) { xr = p.x - uCollapse.y; id = 10.0; }
+	float ax = abs( xr );
+	if ( ax < ${CORRIDOR.toFixed(3)} ) {
+		float col = id + ( ax < ${LANES_END.toFixed(3)} ? clamp( floor( xr / ${LANE_WIDTH.toFixed(3)} + 0.5 ), -1.0, 1.0 ) : sign( xr ) * 2.0 );
+		float sg = floor( ( p.y - ${GRID.toFixed(1)} ) / ${SLAB.toFixed(3)} ), front = ${GRID.toFixed(1)} + sg * ${SLAB.toFixed(3)};
+		return front - ( ${HOLD.toFixed(3)} * ( caHash( vec2( col, sg ) ) - 0.5 ) + ${RUN.toFixed(3)} * ( caNoise1( front / 13.0, col ) - 0.5 ) );
+	}
+	return p.y - ( ${WAVE.toFixed(3)} * ( caNoise( vec2( p.x / 5.0, p.y / 9.0 ) ) - 0.5 ) + ${CRUMB.toFixed(3)} * ( caNoise( vec2( p.x / 1.5 + 17.0, p.y / 2.0 ) ) - 0.5 ) );
+}
+#endif
+`;
+const BREAK_TEST = /* glsl */`
+#ifdef COLLAPSE_EDGE
+	{ vec3 caW = transpose( mat3( viewMatrix ) ) * ( - vClipPosition - viewMatrix[ 3 ].xyz ); if ( caBreak( caW.xz ) > uCollapse.x ) discard; }
+#endif
+`;
+{
+  const head = '#if NUM_CLIPPING_PLANES > 0\n';
+  const C = THREE.ShaderChunk;
+  if (C.clipping_planes_fragment.startsWith(head) && C.clipping_planes_pars_fragment.startsWith(head)) {
+    C.clipping_planes_pars_fragment = head + BREAK_GLSL + C.clipping_planes_pars_fragment.slice(head.length);
+    C.clipping_planes_fragment = head + BREAK_TEST + C.clipping_planes_fragment.slice(head.length);
+  } else console.warn('[collapse] clipping chunks changed; the ground breaks in a straight line');
+}
+const edgeUniform = { value: new THREE.Vector2(1e6, 1e6) };
+function edgeCompile(shader) { applyCurve(shader); shader.uniforms.uCollapse = edgeUniform; }
+/** Let the ground break raggedly in this material (it must also have the collapse's clipping plane). */
+function edged(m) {
+  if (m.onBeforeCompile === edgeCompile) return;
+  m.defines = Object.assign({}, m.defines, { COLLAPSE_EDGE: '' });
+  m.onBeforeCompile = edgeCompile;
+  m.needsUpdate = true;
+}
 
 const rnd = Math.random;
 const _m = new THREE.Matrix4(), _t = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler();
@@ -111,19 +198,37 @@ export function earthTexture(width) {
   return t;
 }
 
-/** A face of broken earth, PIT deep with its top at y = 0, facing +z. */
-export function earthFace(width) {
-  const geo = new THREE.PlaneGeometry(width, PIT, Math.round(width / 2), 10);
-  const p = geo.attributes.position;
-  for (let i = 0; i < p.count; i++) {   // rough, not a flat wall
-    const x = p.getX(i), y = p.getY(i);
-    if (y < PIT / 2 - 0.1) p.setZ(i, Math.sin(x * 0.37) * 0.12 + Math.sin(x * 1.9 + y) * 0.1 + (rnd() - 0.5) * 0.3);
+// The bank under the lip: a ribbon across the world, following the lip (see Collapse._bank), lumpy and leaning
+// back as it goes down. Depths of its rows below the top, in metres of the PIT.
+const ROWS = [0, 0.25, 0.7, 1.4, 2.4, 4, 7, 12, 19, 28, 40];
+/** Where the bank has a column of vertices: closely near the track, sparsely far out, and twice at each place
+ *  the track's slabs meet (one for each slab), so the lip can step there. */
+function bankColumns(yard) {
+  const xs = [];
+  for (let x = -SIDE; x <= SIDE + 1e-6; x += Math.abs(x) < 40 ? 0.75 : 4) xs.push(x);
+  const joins = [0, LANE_WIDTH / 2, LANES_END, CORRIDOR];
+  for (const c of [0, yard]) for (const j of joins) for (const s of [-1, 1]) if (j > 0 || s > 0) xs.push(c + s * j - 1e-3, c + s * j + 1e-3);
+  xs.push(CORRIDOR + 0.6 - 1e-3, CORRIDOR + 0.6 + 1e-3);
+  return xs.sort((p, q) => p - q);
+}
+
+function bank(xs) {
+  const n = xs.length, r = ROWS.length, g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(n * r * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(n * r * 3), 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(n * r * 2), 2).setUsage(THREE.DynamicDrawUsage));
+  const idx = [];
+  for (let i = 0; i + 1 < n; i++) {
+    for (let k = 0; k + 1 < r; k++) {
+      const a = i * r + k, b = a + 1, c = a + r + 1, d = a + r;   // top left, below it, below right, top right
+      idx.push(a, b, c, a, c, d);
+    }
   }
-  geo.translate(0, -PIT / 2, 0);   // top edge at y = 0; placed just under the ground
-  geo.computeVertexNormals();
-  const mat = new THREE.MeshLambertMaterial({ map: earthTexture(width), emissive: 0x2a2018, emissiveIntensity: 0.6 });
-  const m = new THREE.Mesh(geo, mat);
+  g.setIndex(idx);
+  const mat = new THREE.MeshLambertMaterial({ map: earthTexture(16), emissive: 0x2a2018, emissiveIntensity: 0.6, side: THREE.DoubleSide });
+  const m = new THREE.Mesh(g, mat);
   m.frustumCulled = false;
+  m.receiveShadow = true;
   return m;
 }
 
@@ -260,6 +365,12 @@ export class Collapse {
     this.yardX = null;       // ...and put a rail yard this far to the right
   }
 
+  /** Whether the ground at (x, z) has broken away, once the edge is at `edge`. */
+  gone(x, z, edge = this.z) { return breakAt(x, z, this.yardX) > edge; }
+
+  /** Let the ground break raggedly in a material cut by this.plane (see breakAt). */
+  edged(m) { edged(m); }
+
   /** Called once the world exists: the cut, the chasm, and the pieces the ground breaks into. */
   start() {
     const ctx = this.ctx, scene = ctx.scene, env = ctx.env, vis = ctx.level.vis;
@@ -270,6 +381,7 @@ export class Collapse {
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
         // what is cut away casts no shadow either
         if (m.clippingPlanes !== planes) { m.clippingPlanes = planes; m.clipShadows = true; m.needsUpdate = true; }
+        edged(m);
       }
     };
     scene.getObjectByName('world-track')?.traverse(clip);
@@ -281,12 +393,13 @@ export class Collapse {
     // falling buildings keep the world's look, without the cut
     this.mats = {};
     const others = this.planes.filter((p) => p !== this.plane);
-    for (const k of ['o', 'c', 'g']) { this.mats[k] = env.mats[k].clone(); this.mats[k].clippingPlanes = others; }
+    for (const k of ['o', 'n', 'c', 'g']) { this.mats[k] = env.mats[k].clone(); this.mats[k].clippingPlanes = others; }
 
     // what the cut slices open (walls, platforms, bridge decks) shows solid inside: its inner faces, near the
     // edge, in one flat dark colour
     this.capPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 1e6);   // keeps z >= edge - CAP
     const capMat = new THREE.MeshBasicMaterial({ color: 0x3b332d, side: THREE.BackSide, clippingPlanes: [...this.planes, this.capPlane] });
+    edged(capMat);
     this.caps = [];
     for (let i = 0; i < 6; i++) {
       const m = new THREE.Mesh(new THREE.BufferGeometry(), capMat);
@@ -310,16 +423,13 @@ export class Collapse {
     this.dust = new ParticleSystem({ capacity: DUST[q] ?? 900, texture: dustAtlas(), parent: scene, curved: true, renderOrder: 19, name: 'collapse-dust' });
     this.dustScale = (DUST[q] ?? 900) / DUST.high;
 
-    // the broken face of the ground, and the chasm's dark floor far below
-    // (in three parts: the track's corridor, and each side, whose ground may stand higher behind a wall)
-    // (the sides overlap the middle a little, a hair behind it, so no seam shows)
-    this.faces = [earthFace(CORRIDOR * 2), earthFace(SIDE), earthFace(SIDE)];
-    this.faces[1].position.x = -(CORRIDOR + SIDE / 2 - 0.4);
-    this.faces[2].position.x = CORRIDOR + SIDE / 2 - 0.4;
+    // the bank of broken earth under the lip, and the chasm's dark floor far below
+    this.bankXs = bankColumns(YARD);
+    this.face = bank(this.bankXs);
     this.floor = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshBasicMaterial({ color: 0x120e0b, fog: false }));
     this.floor.rotation.x = -Math.PI / 2;
     this.floor.frustumCulled = false;
-    for (const o of [...this.faces, this.floor]) { o.visible = false; scene.add(o); }
+    for (const o of [this.face, this.floor]) { o.visible = false; scene.add(o); }
     this.reset();
   }
 
@@ -327,14 +437,15 @@ export class Collapse {
     this.on = false;
     this.z = 1e6;
     this.plane.constant = 1e6;
-    this.cursor = null;      // where the next slab of track breaks off
+    this.cols = null;        // each line of slabs (lanes and shoulders), and the next slab to break in it
     this.rubbleZ = null;     // where the next row of rubble and dust breaks off
     for (const b of this.bodies) this._remove(b);
     this.bodies.length = 0;
     for (const p of this.slabs || []) p.clear();
     this.rocks?.clear();
     this.dust?.clear();
-    if (this.floor) for (const o of [...this.faces, this.floor, ...this.caps]) o.visible = false;
+    if (this.floor) for (const o of [this.face, this.floor, ...this.caps]) o.visible = false;
+    edgeUniform.value.set(1e6, 1e6);
   }
 
   /** Move the edge to z (it only ever advances) and let everything that broke away fall. */
@@ -342,16 +453,18 @@ export class Collapse {
     if (active) {
       if (!this.on) {
         this.on = true;
-        this.cursor = GRID + Math.floor((z - GRID) / SLAB) * SLAB;   // on the track's own segment grid
         this.rubbleZ = z;
       }
       if (z < this.z) this.z = z;
       this._break();
-      this.plane.constant = this.z;
-      this._faces();
+      // the plane only trims what stands well behind the lip (and keeps it out of the shadows); the shaders
+      // break the rest along the lip
+      this.plane.constant = this.z + REACH;
+      edgeUniform.value.set(this.z, this.yardX ?? 1e6);
+      this._bank();
       this._caps();
       this.floor.position.set(0, -PIT, this.z);
-      for (const o of [...this.faces, this.floor]) o.visible = true;
+      for (const o of [this.face, this.floor]) o.visible = true;
     }
     if (dt > 0) {
       for (const p of this.slabs) this._slabs(p, dt);
@@ -363,16 +476,43 @@ export class Collapse {
     this.dust.update(dt);
   }
 
-  /** Put the broken faces at the edge, each side's top level with the ground there: a street behind a
-   *  retaining wall stands a few metres above the track; the near side cut away by the camera is open ground. */
-  _faces() {
-    const k = kOf(this.z), scenery = this.ctx.env.scenery;
-    this.faces[0].position.set(0, CUT_TOP, this.z);
-    for (const s of [-1, 1]) {
-      const Z = scenery._zone(s, k), f = this.faces[s < 0 ? 1 : 2];
-      const top = s > 0 && this.nearCut ? CUT_TOP : Z.type === 'wall' ? Z.h - 0.02 : CUT_TOP;
-      f.position.set(f.position.x, top, this.z - 0.05);
+  /** How far back the lip is at x: the back of the last slab still standing on the track, or where the
+   *  wandering line crosses the edge elsewhere. */
+  _lip(x) {
+    const E = this.z, yard = this.yardX;
+    const xr = yard !== null && x > CORRIDOR + 0.6 ? x - yard : x;
+    if (Math.abs(xr) < CORRIDOR) {
+      let sg = Math.floor((E - REACH - GRID) / SLAB);
+      while (sg < 1e6 && breakAt(x, GRID + (sg + 1.5) * SLAB, yard) <= E) sg++;
+      return GRID + (sg + 1) * SLAB;
     }
+    let z = E;
+    for (let k = 0; k < 4; k++) z = E + z - breakAt(x, z, yard);
+    return z;
+  }
+
+  /** Lay the bank along the lip, each part's top level with the ground there: a street behind a retaining wall
+   *  stands a few metres above the track; the near side cut away by the camera is open ground. */
+  _bank() {
+    const E = this.z, xs = this.bankXs, r = ROWS.length, scenery = this.ctx.env.scenery, k = kOf(E);
+    const g = this.face.geometry, P = g.attributes.position.array, UV = g.attributes.uv.array;
+    const tops = [-1, 1].map((s) => { const Z = scenery._zone(s, k); return Z.type === 'wall' ? Z.h - 0.02 : CUT_TOP; });
+    for (let i = 0; i < xs.length; i++) {
+      const x = xs[i], zl = this._lip(x);
+      const top = Math.abs(x) < CORRIDOR || (x > 0 && this.nearCut) ? CUT_TOP : tops[x < 0 ? 0 : 1];
+      for (let j = 0; j < r; j++) {
+        // down the bank: crumbly and leaning back near the lip, steeper below, lumpy all the way
+        const d = ROWS[j] * (top + PIT) / PIT;
+        const y = top - d - (j === 0 ? 0.12 * noise2(x / 0.7, 3) : 0);
+        const z = zl - 0.2 + Math.min(d, 2.5) * 0.35 + Math.max(0, d - 2.5) * 0.08 + (noise2(x / 1.2, d) - 0.5) * 0.8 * Math.min(1, d / 0.4);
+        const o = (i * r + j) * 3;
+        P[o] = x; P[o + 1] = y; P[o + 2] = z;
+        UV[(i * r + j) * 2] = (x + (z - E) * 0.5) / 16;
+        UV[(i * r + j) * 2 + 1] = 1 - (top - y) / PIT;
+      }
+    }
+    g.attributes.position.needsUpdate = g.attributes.uv.needsUpdate = true;
+    g.computeVertexNormals();
   }
 
   /** Give the chunks the edge is cutting through their solid insides. */
@@ -394,27 +534,39 @@ export class Collapse {
   // ------------------------------------------------------------------ breaking
   _break() {
     const edge = this.z;
-    // slabs of track, once the edge has passed the whole of one (so each replaces exactly what was cut)
-    for (; this.cursor - SLAB > edge; this.cursor -= SLAB) {
-      const zc = this.cursor - SLAB / 2;
-      const odd = Math.round((GRID - this.cursor) / SLAB) & 1;
-      for (const lane of [-1, 0, 1]) this._slab(this.slabs[odd], lane * LANE_WIDTH, zc);
-      if (this.yardX !== null) for (const lane of [-1, 0, 1]) this._slab(this.slabs[odd], this.yardX + lane * LANE_WIDTH, zc);
-      const u = (LANE_WIDTH + BED.foot + BED.shoulder + 0.05) / 2;
-      for (const s of [-1, 1]) this._slab(this.slabs[2], s * u, zc);
+    // slabs of track, each as its stretch of ground breaks (so each replaces exactly what broke away)
+    if (!this.cols) {
+      const u = (LANES_END + BED.shoulder + 0.05) / 2;
+      this.cols = [-u, -LANE_WIDTH, 0, LANE_WIDTH, u].map((x) => ({ x, yard: false }));
+      this.cols.push(...this.cols.map((c) => ({ x: c.x, yard: true })));
+    }
+    for (const c of this.cols) {
+      const x = c.yard ? (this.yardX === null ? null : this.yardX + c.x) : c.x;
+      if (x === null) { c.sg = null; continue; }
+      // a line starts at the first slab still standing (what broke before it is not seen)
+      if (c.sg == null) c.sg = Math.floor((edge + REACH - GRID) / SLAB);
+      for (; breakAt(x, GRID + (c.sg + 0.5) * SLAB, this.yardX) > edge; c.sg--) {
+        const pool = Math.abs(c.x) > LANES_END ? this.slabs[2] : this.slabs[(c.sg + 1) & 1];
+        this._slab(pool, x, GRID + (c.sg + 0.5) * SLAB);
+      }
     }
     // rubble and dust, a row every 0.6 m, so the amount is the same at any frame rate
-    for (; this.rubbleZ > edge; this.rubbleZ -= 0.6) this._row(this.rubbleZ);
+    for (; this.rubbleZ > edge; this.rubbleZ -= 0.6) this._row();
     // trains, ramps and barriers go over once enough of them hangs over the edge; until then they stand, and
     // runners can still run on them and into them
     const level = this.ctx.level;
     for (let i = level.recs.length - 1; i >= 0; i--) {
       const r = level.recs[i];
-      if (balance(r) > edge) this._takeObstacle(r);
+      if (this.gone((r.col.minX + r.col.maxX) / 2, balance(r))) this._takeObstacle(r);
     }
     // and buildings the edge is about to cut into
     for (const c of this.ctx.env.chunks.active.values()) {
-      for (const blk of c.blocks || []) if (!blk.taken && blk.box[5] > edge - 1) this._takeBuilding(c, blk);
+      for (const blk of c.blocks || []) {
+        if (blk.taken) continue;
+        // (anywhere along its back: the lip wanders)
+        const [x0, , , x1, , z1] = blk.box;
+        for (let x = x0; x < x1 + 1; x += 1) if (this.gone(Math.min(x, x1), z1 + 1.5)) { this._takeBuilding(c, blk); break; }
+      }
     }
   }
 
@@ -428,20 +580,21 @@ export class Collapse {
     });
   }
 
-  _row(z) {
-    const R = this.rocks, n = (k) => Math.round(k * this.dustScale + rnd() * 0.5);
+  /** Rubble and dust off the lip, wherever along it each piece breaks away. */
+  _row() {
+    const n = (k) => Math.round(k * this.dustScale + rnd() * 0.5);
+    const rock = (x, y, size, palette) => this._rock(x, y, this._lip(x) - 0.3, size, palette);
     // ballast and clods off the track, chunks of pavement and wall from the street on either side
-    for (let k = 0; k < 4; k++) this._rock((rnd() - 0.5) * 10, -0.1, z, 0.12 + rnd() * 0.22, STONE);
-    for (let k = 0; k < 2; k++) this._rock((rnd() - 0.5) * 12, -0.6, z, 0.3 + rnd() * 0.5, SOIL);
-    if (rnd() < 0.7) { const s = rnd() < 0.5 ? -1 : 1; this._rock(s * (5.5 + rnd() * 18), 0, z, 0.5 + rnd() * 0.9, CONCRETE); }
-    void R;
+    for (let k = 0; k < 4; k++) rock((rnd() - 0.5) * 10, -0.1, 0.12 + rnd() * 0.22, STONE);
+    for (let k = 0; k < 2; k++) rock((rnd() - 0.5) * 12, -0.6, 0.3 + rnd() * 0.5, SOIL);
+    if (rnd() < 0.7) { const s = rnd() < 0.5 ? -1 : 1; rock(s * (5.5 + rnd() * 18), 0, 0.5 + rnd() * 0.9, CONCRETE); }
     // dust thrown up along the lip, and darker dust rising out of the chasm
     for (let k = 0; k < n(3); k++) {
-      const wide = rnd() < 0.55 ? 7 : 26;
-      this._puff((rnd() - 0.5) * 2 * wide, -1.6 + rnd() * 1.8, z + 0.4 + rnd() * 2.4, 2 + rnd() * 2.2, 2.8, 2.4 + rnd() * 1.8, 0.75 + rnd() * 0.25, DUST_LIGHT, 0.6 + rnd() * 1.8);
+      const wide = rnd() < 0.55 ? 7 : 26, x = (rnd() - 0.5) * 2 * wide;
+      this._puff(x, -1.6 + rnd() * 1.8, this._lip(x) + 0.4 + rnd() * 2.4, 2 + rnd() * 2.2, 2.8, 2.4 + rnd() * 1.8, 0.75 + rnd() * 0.25, DUST_LIGHT, 0.6 + rnd() * 1.8);
     }
     if (rnd() < 0.8 * this.dustScale + 0.2) {
-      this._puff((rnd() - 0.5) * 40, -5 - rnd() * 14, z + 3 + rnd() * 6, 4 + rnd() * 3, 2, 3 + rnd() * 1.8, 0.55, DUST_DEEP, 2 + rnd() * 2.5);
+      this._puff((rnd() - 0.5) * 40, -5 - rnd() * 14, this.z + 3 + rnd() * 6, 4 + rnd() * 3, 2, 3 + rnd() * 1.8, 0.55, DUST_DEEP, 2 + rnd() * 2.5);
     }
   }
 
@@ -511,7 +664,7 @@ export class Collapse {
     blk.taken = true;
     const group = new THREE.Group();
     group.matrixAutoUpdate = false;
-    for (const key of ['o', 'c', 'g']) {
+    for (const key of ['o', 'n', 'c', 'g']) {
       const [v0, i0] = blk.a[key], [v1, i1] = blk.b[key];
       if (i1 <= i0) continue;
       const src = chunk.meshes[key].geometry, g = new THREE.BufferGeometry();
@@ -524,7 +677,8 @@ export class Collapse {
       const mesh = new THREE.Mesh(g, this.mats[key]);
       mesh.matrixAutoUpdate = false;
       mesh.frustumCulled = false;
-      mesh.receiveShadow = key === 'o';
+      mesh.receiveShadow = key === 'o' || key === 'n';
+      mesh.castShadow = key === 'n';
       if (key === 'g') { mesh.renderOrder = 5; mesh.visible = this.ctx.env.chunks.glowVisible; }
       group.add(mesh);
       // and gone from the chunk: its triangles collapse to nothing
