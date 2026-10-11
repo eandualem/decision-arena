@@ -16,6 +16,12 @@ while a model thinks. You see both how well and how fast each model decides.
 the fifth of five races. The decision panel on the right shows each model's record from the
 first four.*
 
+[![How it works: what each model is asked, and why the race is fair](docs/images/explainer-poster.jpg)](docs/explainer.mp4)
+
+*[How it works](docs/explainer.mp4) (4 min, captions in the video, [transcript](docs/explainer.srt)):
+what a decision model gets and answers, a real question word for word, and why the race is
+fair.*
+
 ## Run it
 
 You need [uv](https://docs.astral.sh/uv/) and a key for at least one model.
