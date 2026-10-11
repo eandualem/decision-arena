@@ -11,10 +11,10 @@ import { YARD } from './collapse.js';
 const EDGE = 4.8;             // the corridor's right edge: scenery starts here
 const CORRIDOR = 5.35;        // where the track's gravel shoulder ends
 const AZIMUTH = Math.PI / 4;  // 45 degrees between looking from behind and looking from the side
-const ELEVATION = 0.78;       // camera height per metre of horizontal distance (about 38 degrees down)
+const ELEVATION = 0.62;       // camera height per metre of horizontal distance (about 32 degrees down)
 const FILL = 0.88;            // the pack fills at most this much of the screen
-const NEAR = 9, FAR = 40;     // metres: never closer than this, never further than this
-const AHEAD = 22;             // metres of track ahead of the leader kept in view
+const NEAR = 15, FAR = 44;    // metres: never closer than this, never further than this
+const AHEAD = 34;             // metres of track ahead of the leader kept in view
 const CLOSE = 7;              // the edge joins the frame once it is this close to the last runner
 const GROUND_CUT = -0.13;     // the open ground beside the track, just under the track's own shoulder
 

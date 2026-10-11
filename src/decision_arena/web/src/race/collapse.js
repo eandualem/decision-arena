@@ -713,15 +713,17 @@ export class Collapse {
     }
     this.ctx.scene.add(group);
     const [x0, y0, z0, x1, y1, z1] = blk.box;
-    const x = (x0 + x1) / 2, zb = z1 - (z1 - z0) * 0.3;
+    // A building does not topple: the ground gives way under its back, and it sinks into the chasm at once,
+    // leaning back as it goes, so it never stands sliced at the lip.
+    const x = (x0 + x1) / 2, zb = z1;
     this.bodies.push({
       kind: 'building', group,
       pivot0: new THREE.Vector3(x, y0, zb), P: new THREE.Vector3(x, y0, zb),
-      // a building does not topple: it sinks into the chasm, leaning back as it goes
       alpha: 0.5 + rnd() * 0.3, drop: 0, max: 0.3 + rnd() * 0.25, gravity: 9 + rnd() * 4,
-      th: 0, w: 0, roll: 0, rw: (rnd() - 0.5) * 0.12, vy: 0, vz: 0, phase: 'hold', w0: x1 - x0, h: y1 - y0, zb,
+      th: 0, w: 0, roll: 0, rw: (rnd() - 0.5) * 0.12, vy: 0, vz: 0, phase: 'tip', w0: x1 - x0, h: y1 - y0, zb,
       bottom: PIT + (y1 - y0) + 4,
     });
+    this._plume(x, zb, Math.max(3, x1 - x0), y1 - y0, 26);
   }
 
   /** Move one whole thing; returns true once it is gone into the chasm. */

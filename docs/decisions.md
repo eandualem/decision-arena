@@ -54,14 +54,15 @@ watch and practical for only two to four players.
   they always agree. Trains, ramps and
   barriers stay whole: each holds until about a third of it hangs over the
   edge, then loses its balance, tips back until it stands almost on end,
-  and drops. Buildings and stacked containers sink and lean back into the
-  chasm in one piece. Rubble falls with them, and dust billows up along the
+  and drops. Buildings and stacked containers go as soon as the lip reaches
+  their back: they lean back and sink into the chasm in one piece, so none
+  stands sliced at the edge. Rubble falls with them, and dust billows up along the
   whole edge. Under the lip a lumpy bank of earth leans back as it falls
   away into a dark chasm, showing its layers.
 - **The camera.** One steady view from behind and to the right, 45 degrees
   off the track, looking along it. It frames every runner still in the race
-  and 22 m of track ahead of the leader, centred on screen, as close as that
-  allows (9 to 40 m), so it moves in as runners go out and still keeps two
+  and 34 m of track ahead of the leader, centred on screen, as close as that
+  allows (15 to 44 m), so it moves in as runners go out and still keeps two
   far apart in view. The collapse joins the frame only when it is within
   7 m of the last runner. Scenery on the near side is cut away, and a rail
   yard of idle tracks, behind a low railing, takes its place, so nothing
