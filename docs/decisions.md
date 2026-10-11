@@ -195,6 +195,12 @@ coins change nothing in the race, so coins a minute is a side measure.
 **Why.** Keys never reach a page, the model code is plain Python that tests
 can drive with recorded answers, and the game keeps its own clock.
 
+d1-3B races only when named. On a 16 GB Mac, with the game drawing in the
+browser, it held so much of the shared GPU memory that the race dropped from
+about 50 frames a second to about 6, even when only Laya was answering. Laya
+alone costs a few frames a second; running it on the CPU didn't help and made
+its answers three times slower, so it stays on the GPU.
+
 Why d1-3B as the second local model: among open-weight decision models that
 run on a laptop, it is small (3B parameters, 2.9 GB at 8 bits), its maker
 reports it on the same Decision Index as Jev (48.6 against Jev's 57.9), and

@@ -41,6 +41,9 @@ PLAYERS: dict[str, Callable[[], Model]] = {
     "liquid": apis.liquid,
 }
 
+# Races only when named: on a 16 GB Mac, d1-3B beside the game drops it to a few frames a second.
+ON_REQUEST = {"d1"}
+
 # Models on this computer: each checks itself as it starts, with its own first question.
 LOCAL = {
     "laya": lambda: local.engine_python() is not None,
@@ -173,13 +176,15 @@ def main(argv: list[str] | None = None) -> None:
         "--players",
         default="",
         help=f"comma-separated, one per runner: {', '.join(PLAYERS)} or bot "
-        "(default: every model with its key set, up to six; bots if none)",
+        "(default: every model with its key set, up to six, except d1; bots if none)",
     )
     parser.add_argument("--runners", type=int, help="two to six runners (default: one per player)")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--no-browser", action="store_true", help="don't open the page")
     args = parser.parse_args(argv)
-    names = [n.strip().lower() for n in args.players.split(",") if n.strip()] or available()[:6]
+    names = [n.strip().lower() for n in args.players.split(",") if n.strip()] or [
+        n for n in available() if n not in ON_REQUEST
+    ][:6]
     if len(names) == 1:
         names.append("bot")  # a race needs two
     runners = args.runners or len(names) or 4

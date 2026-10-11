@@ -24,7 +24,7 @@ uv run decision-arena
 The page opens in your browser. Press Space to start a race, D to show or hide
 the decision panel, and C to switch camera.
 
-By default every model with a key races, up to six. Choose players with
+By default every model with a key races, up to six, except d1-3B (see below). Choose players with
 `--players`, for example `uv run decision-arena --players jev,openai,laya`.
 `--runners` sets the number of runners (two to six); `bot` fills a seat with a
 built-in runner that isn't a model. `--port` and `--no-browser` do what they
@@ -36,10 +36,14 @@ say.
 | `openai` | GPT-6 Luna, OpenAI Decisions API | `OPENAI_API_KEY` |
 | `perplexity` | Perplexity Decider 1.1 | `PERPLEXITY_API_KEY` |
 | `laya` | Laya, on your computer | none: install it with `uv tool install 'laya[serve]'` |
-| `d1` | Liquid d1-3B, on your computer | none: needs llama.cpp build 11483 or newer (see below) |
+| `d1` | Liquid d1-3B, on your computer, only when named | none: needs llama.cpp build 11483 or newer (see below) |
 | `clef` | Cloudflare Clef-flash on Workers AI | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN` |
 | `microsoft` | Microsoft Decision-1, through Vercel's AI Gateway | `AI_GATEWAY_API_KEY` |
 | `liquid` | Liquid D1, through Vercel's AI Gateway | `AI_GATEWAY_API_KEY` |
+
+d1-3B races only when you name it (`--players jev,laya,d1`). It needs more memory
+than a 16 GB Mac can spare beside the game: there, the race dropped from about 50
+frames a second to about 6. It suits a machine with more memory.
 
 For d1-3B, install a [llama.cpp release](https://github.com/ggml-org/llama.cpp/releases)
 from build b11483 on, so that `llama-server` is on your `PATH`; `brew install llama.cpp`
