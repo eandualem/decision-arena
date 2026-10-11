@@ -22,6 +22,11 @@ the demo.
   that is the speed story the demo tells.
 - Fairness: everyone runs the same track from a shared start, and the
   state a model sees includes what its runner is already doing.
+- Original work only: the game is Decision Arena on the Rail Dash engine.
+  Never use the names, characters, logos, art, music or UI of any other
+  runner game, and never compare the game to one by name in anything
+  user-visible, the README or other public text. Characters, the chaser,
+  graffiti, sounds and names stay our own.
 
 ## Decision models
 
