@@ -135,19 +135,34 @@ arrives, after which the page asks again (see 3). The server turns what the
 runner sees into a short text and five options, in the request shape Entune
 uses: left, right, jump, roll and keep going, each described.
 
-What a runner sees: its lane and what it is doing (running, in the air and
-when it lands, rolling and when it stands up, changing lanes, on a train's
-roof, wearing spring shoes), its speed, how long its own model's answers have
-taken (the mean of its last five), its last move, its place, every other
-runner still racing with its lane and gap, how far behind it the ground is
-breaking and whether that is gaining on it, and for each lane, its own first,
-what is ahead in the next 60 m: low barriers to jump, high barriers to roll
-under, buffer stops, ramps and trains, standing or coming at it. Each
-obstacle has its distance, when the runner reaches it at its current speed
-(a train coming at it closes at both speeds), and how long after its answer
-arrives that is. The instructions give the game's timing windows: when a
-jump clears a low barrier or a buffer stop and how long a roll stays low,
-measured by stepping the game's physics.
+What a runner sees, in this order:
+- **Itself:** its lane and what it is doing (running, in the air and when it
+  lands, rolling and when it stands up, changing lanes from which lane to
+  which, on a train's roof, wearing spring shoes, protected after a crash or
+  a landing), its speed, how long its own model's answers have taken (the
+  mean of its last five), and its last move.
+- **The lanes,** its own first, over the next 100 m: up to four obstacles
+  each. Each obstacle has its distance, when the runner reaches it at its
+  current speed (a train coming at it closes at both speeds), and how long
+  after its answer arrives that is. A ramp is told together with the train
+  it leads onto. A train beside the runner in the next lane says that moving
+  into that lane now bounces it off. On a roof, barriers are marked as on
+  the ground below.
+- **The others:** its place, and every other runner still racing, with its
+  lane, its gap and whether it is down after a crash.
+- **The collapse:** how far behind the ground is breaking and whether that
+  is gaining on it.
+
+The instructions give the rules a decision needs. The game's timing windows,
+measured by stepping its physics: when a jump clears a low barrier or a
+buffer stop, and how long a roll stays low. That changing lanes into the side
+of a train or barrier bounces a runner back. That a ramp leads onto its
+train's roof, and that a roof ends in a drop unless the next roof starts
+within 3 m. That spring shoes clear trains.
+
+The lanes come before the standings because they decide the move. A
+100 m look-ahead is over 3 s at top speed, enough for two answers. Up to four
+obstacles a lane keeps the text short.
 
 Every runner gets the same fields and the same text; only its own position,
 and its own model's answer time, differ. Telling a model its answer time is

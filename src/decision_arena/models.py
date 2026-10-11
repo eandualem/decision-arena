@@ -23,19 +23,23 @@ INSTRUCTIONS = (
     "A lane change takes 0.13 s. A jump lasts 0.61 s and clears a low barrier you reach "
     "0.10 to 0.55 s after jumping, or a buffer stop you reach 0.14 to 0.50 s after: jump "
     "too early and you land before it. A roll gets you under a high barrier you reach within "
-    "0.64 s of rolling: roll too early and you stand up before it. Trains are too high to "
-    "jump onto except up a ramp. Running into another runner's back trips you, changing "
+    "0.64 s of rolling: roll too early and you stand up before it. Changing lanes into the "
+    "side of a train or barrier bounces you back and costs speed. Trains are too high to jump "
+    "onto, except with spring shoes; a ramp runs straight up onto its train's roof. On a roof, "
+    "ground obstacles pass below you; where the roof ends you drop to the ground, unless the "
+    "next roof starts within 3 m. Running into another runner's back trips you, changing "
     "lanes into one bounces you back, and jumping takes you over one."
 )
 
 LANES = {-1: "left", 0: "middle", 1: "right"}
+RANGE = 100  # metres ahead a runner sees (race/models.js)
+SHOWN = 4  # obstacles described per lane, nearest first
 
 # What each obstacle is, and what gets a runner past it.
 KINDS = {
     "barrierJump": "a low barrier (jump over it)",
     "barrierRoll": "a high barrier (roll under it)",
     "bumper": "a buffer stop (jump over it)",
-    "ramp": "a ramp up onto a train roof (run up it)",
 }
 
 
@@ -65,7 +69,7 @@ def question(seen: dict[str, Any]) -> Question:
     answer (its model's recent answer time in seconds, or None before its first), last (its
     last move, or None), place, of, others (every other runner still racing: {name, gap
     (metres, ahead is positive), lane, down}), edge (metres behind) and edgeSpeed (m/s),
-    lanes (three lists, left to right, of {kind, at, length, moving, speed}).
+    lanes (three lists, left to right, nearest first, of {kind, at, length, moving, speed}).
     """
     lane = int(seen["lane"])
     speed = float(seen["speed"])
@@ -82,6 +86,13 @@ def question(seen: dict[str, Any]) -> Question:
         )
     if seen.get("last"):
         parts.append(f"Your last move was {seen['last']}.")
+    roof = bool(seen.get("roof"))
+    for i in [lane, *(other for other in (-1, 0, 1) if other != lane)]:
+        name = f"Your lane ({LANES[i]})" if i == lane else f"{LANES[i].capitalize()} lane"
+        text = _lane(
+            seen["lanes"][i + 1], speed, answer, mine=i == lane, next_to=abs(i - lane) == 1, roof=roof
+        )
+        parts.append(f"{name}: {text}.")
     parts.append(f"You are {_ordinal(int(seen['place']))} of {int(seen['of'])}.")
     for other in seen.get("others") or []:
         gap = float(other["gap"])
@@ -98,11 +109,6 @@ def question(seen: dict[str, Any]) -> Question:
         else ", and you are pulling away from it" if closing <= -0.5 else ""
     )
     parts.append(f"The ground is breaking away {edge:.0f} m behind you{pace}.")
-    order = [lane, *(other for other in (-1, 0, 1) if other != lane)]
-    for i in order:
-        name = f"Your lane ({LANES[i]})" if i == lane else f"{LANES[i].capitalize()} lane"
-        mine = i == lane and bool(seen.get("roof"))
-        parts.append(f"{name}: {_lane(seen['lanes'][i + 1], speed, answer, mine)}.")
     options = {
         "left": "move one lane to the left"
         + (" (you are already in the left lane: nothing happens)" if lane == -1 else ""),
@@ -115,21 +121,31 @@ def question(seen: dict[str, Any]) -> Question:
     return Question(" ".join(parts), options)
 
 
-def _lane(things: list[dict[str, Any]], speed: float, answer: float | None, on_roof: bool) -> str:
-    """One lane, nearest first. `on_roof`: this is the runner's lane and it is on a roof, so
-    a train beside it is the one under it."""
+def _lane(
+    things: list[dict[str, Any]], speed: float, answer: float | None,
+    mine: bool, next_to: bool, roof: bool,
+) -> str:
+    """One lane, nearest first. `mine`: the runner's own lane; `next_to`: one lane change away;
+    `roof`: the runner is on a train roof. A ramp and the train it leads onto are one item."""
     if not things:
-        return "clear for 60 m"
-    said = []
-    for t in things:
+        return f"clear for {RANGE} m"
+    said: list[str] = []
+    i = 0
+    while i < len(things) and len(said) < SHOWN:
+        t = things[i]
         at, length = float(t["at"]), float(t["length"])
         closing = speed + (float(t["speed"]) if t.get("moving") else 0)  # m/s it nears you at
-        train = t["kind"] == "train"
+        onto = things[i + 1] if t["kind"] == "ramp" and i + 1 < len(things) else None
+        if onto and not (onto["kind"] == "train" and abs(float(onto["at"]) - at - length) < 1):
+            onto = None
         if at <= 0:  # beside (or under) you: say how far it goes on
             left = length + at
-            where = f"{'under' if on_roof else 'beside'} you for another {left:.0f} m"
+            where = f"{'under' if mine and (roof or onto) else 'beside'} you"
+            where += f", reaching its roof in {left:.0f} m" if onto else f" for another {left:.0f} m"
             if closing >= 1:
                 where += f" ({left / closing:.2f} s)"
+            if next_to and t["kind"] == "train" and not roof:
+                where += ": moving into this lane now bounces you off it"
         else:
             where = f"{at:.0f} m ahead"
             if closing >= 1:
@@ -141,14 +157,24 @@ def _lane(things: list[dict[str, Any]], speed: float, answer: float | None, on_r
                         f" ({after:.2f} s after your answer)" if after >= 0
                         else " (before your answer arrives)"
                     )
-        if train:
+        if onto:
+            said.append(
+                f"a ramp {where}, up onto a standing train's roof, {float(onto['length']):.0f} m long"
+            )
+            i += 2
+            continue
+        if t["kind"] == "train":
             what = (
                 f"a train coming at you at {float(t['speed']):.0f} m/s, {length:.0f} m long"
                 if t.get("moving") else f"a standing train, {length:.0f} m long"
             )
             said.append(f"{what}, {where}")
+        elif t["kind"] == "ramp":  # a ramp whose train is out of sight
+            said.append(f"a ramp up onto a train's roof, {where}")
         else:
-            said.append(f"{KINDS.get(t['kind'], 'an obstacle')} {where}")
+            below = " (on the ground, below your roof)" if roof else ""
+            said.append(f"{KINDS.get(t['kind'], 'an obstacle')} {where}{below}")
+        i += 1
     return "; then ".join(said)
 
 

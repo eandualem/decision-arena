@@ -5,11 +5,12 @@
 import { TRAIN, PHYS } from '../config.js';
 import { HW } from '../gameplay/physics.js';
 
-const RANGE = 60;          // metres ahead a runner sees
+const RANGE = 100;         // metres ahead a runner sees: over 3 s at top speed
 const RETRY = 0.5;         // seconds before asking again after a failed answer
 const RATE_WINDOW = 5;     // seconds over which decisions per second are counted
 const ANSWERS = 5;         // a model's answer time is the mean of its last this many
 const MOVE = { left: 'left', right: 'right', jump: 'up', roll: 'down', keep: null };
+const LANE = { '-1': 'left', 0: 'middle', 1: 'right' };
 
 /** The page's end of the socket, shared by every model runner. */
 export class Gateway {
@@ -108,7 +109,7 @@ export function see(r, player) {
   const b = r.b, race = r.race;
   const roof = b.grounded && b.y >= TRAIN.height - 0.3;
   const doing = [];
-  if (b.laneT < 1) doing.push('changing lanes');
+  if (b.laneT < 1) doing.push(`changing lanes from the ${LANE[b.fromLane]} to the ${LANE[b.lane]} lane`);
   if (r.player.flight) doing.push(r.player.flight.kind === 'jetpack' ? 'flying on a jetpack' : 'bouncing on a pogo stick');
   else if (!b.grounded) {
     // when it lands on what is under it now, under gravity alone
@@ -118,6 +119,7 @@ export function see(r, player) {
   } else if (roof) doing.push('running on a train roof');
   if (b.rollT > 0) doing.push(b.grounded ? `rolling, standing up in ${b.rollT.toFixed(2)} s` : 'dropping to roll as it lands');
   if (r.timers.sneakers > 0) doing.push(`wearing spring shoes (jumps clear trains) for ${r.timers.sneakers.toFixed(0)} s more`);
+  if (r.player.invulnT > 0) doing.push(`protected for ${r.player.invulnT.toFixed(1)} s: obstacles don't knock you down`);
   if (!doing.length) doing.push('running');
 
   const lanes = [[], [], []];
