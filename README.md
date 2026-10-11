@@ -12,13 +12,13 @@ while a model thinks. You see both how well and how fast each model decides.
 
 https://github.com/user-attachments/assets/f500dfc3-a4b5-48f8-b9f3-234fac9e9d74
 
-*[Watch a race](docs/race.mp4) (28 s, with sound): Jev, OpenAI, Perplexity, Laya and Clef in
+*A race (28 s, with sound): Jev, OpenAI, Perplexity, Laya and Clef in
 the fifth of five races. The decision panel on the right shows each model's record from the
 first four.*
 
 https://github.com/user-attachments/assets/06496c80-968b-4544-a246-360d391c66fb
 
-*[How it works](docs/explainer.mp4) (4 min, captions in the video, [transcript](docs/explainer.srt)):
+*How it works (4 min, captions in the video, [transcript](docs/explainer.srt)):
 what a decision model gets and answers, a real question word for word, and why the race is
 fair.*
 
