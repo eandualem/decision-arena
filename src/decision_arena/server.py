@@ -42,8 +42,8 @@ PLAYERS: dict[str, Callable[[], Model]] = {
 # A question every model is asked once at the start, so a key that does not work stops the
 # command before the race rather than a runner during it.
 PROBE = {
-    "lane": 0, "doing": ["running"], "speed": 10, "last": None, "place": 1, "of": 1,
-    "ahead": None, "behind": None, "edge": 30, "lanes": [[], [], []],
+    "lane": 0, "doing": ["running"], "roof": False, "speed": 10, "answer": None, "last": None,
+    "place": 1, "of": 1, "others": [], "edge": 30, "edgeSpeed": 9, "lanes": [[], [], []],
 }
 
 

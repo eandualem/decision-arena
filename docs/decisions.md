@@ -124,12 +124,26 @@ arrives, after which the page asks again (see 3). The server turns what the
 runner sees into a short text and five options, in the request shape Entune
 uses: left, right, jump, roll and keep going, each described.
 
-What a runner sees: its lane and what it is doing (running, in the air,
-rolling, changing lanes, on a train's roof), its last move, its place and the
-runner just ahead and behind, how far behind it the ground is breaking, and
-for each lane what is ahead in the next 60 m: low barriers to jump, high
-barriers to roll under, buffer stops, ramps and trains, standing or coming
-at it, with their distances.
+What a runner sees: its lane and what it is doing (running, in the air and
+when it lands, rolling and when it stands up, changing lanes, on a train's
+roof, wearing spring shoes), its speed, how long its own model's answers have
+taken (the mean of its last five), its last move, its place, every other
+runner still racing with its lane and gap, how far behind it the ground is
+breaking and whether that is gaining on it, and for each lane, its own first,
+what is ahead in the next 60 m: low barriers to jump, high barriers to roll
+under, buffer stops, ramps and trains, standing or coming at it. Each
+obstacle has its distance, when the runner reaches it at its current speed
+(a train coming at it closes at both speeds), and how long after its answer
+arrives that is. The instructions give the game's timing windows: when a
+jump clears a low barrier or a buffer stop and how long a roll stays low,
+measured by stepping the game's physics.
+
+Every runner gets the same fields and the same text; only its own position,
+and its own model's answer time, differ. Telling a model its answer time is
+what lets it act on time: an answer made at 0.5 s lands 7 m later at 14 m/s,
+and without it, models jumped and rolled while obstacles were still far off.
+The text states facts and the rules of the game; it never says which move
+to make.
 
 Players are chosen when the server starts (`--players jev,openai,laya`). By
 default every model whose key is set races, up to six, with no bots; bots
@@ -150,4 +164,5 @@ can drive with recorded answers, and the game keeps its own clock.
 **Rejected.** Calling the models from the page: the keys would sit in the
 browser. Sending pixels or the raw obstacle list: decision models answer
 questions about text, and Entune's tested shape is a described state and
-described options.
+described options. Saying when to jump or roll for each obstacle: that
+would be our choice, not the model's.

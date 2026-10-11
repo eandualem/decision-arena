@@ -4,13 +4,19 @@ import pytest
 SEEN = {
     "lane": 0,
     "doing": ["running"],
+    "roof": False,
     "speed": 14.2,
+    "answer": 0.38,
     "last": "jump",
     "place": 2,
     "of": 4,
-    "ahead": {"name": "Mira", "gap": 3.2, "lane": -1},
-    "behind": {"name": "Rex", "gap": 0.4, "lane": 0},
+    "others": [
+        {"name": "Rex", "gap": -0.4, "lane": 0, "down": False},
+        {"name": "Mira", "gap": 3.2, "lane": -1, "down": False},
+        {"name": "Tom", "gap": -11.0, "lane": 1, "down": True},
+    ],
     "edge": 9.4,
+    "edgeSpeed": 16.0,
     "lanes": [
         [{"kind": "barrierJump", "at": 12.3, "length": 0.6, "moving": False, "speed": 0}],
         [],

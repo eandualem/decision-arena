@@ -2,11 +2,13 @@
 // through one WebSocket. Each model runner keeps one question in flight: it sends what it sees, applies the
 // move the moment the answer arrives, and asks again straight away, so a fast model decides more often than a
 // slow one and the race never waits for anyone (docs/decisions.md, 3 and 5).
-import { TRAIN } from '../config.js';
+import { TRAIN, PHYS } from '../config.js';
+import { HW } from '../gameplay/physics.js';
 
 const RANGE = 60;          // metres ahead a runner sees
 const RETRY = 0.5;         // seconds before asking again after a failed answer
 const RATE_WINDOW = 5;     // seconds over which decisions per second are counted
+const ANSWERS = 5;         // a model's answer time is the mean of its last this many
 const MOVE = { left: 'left', right: 'right', jump: 'up', roll: 'down', keep: null };
 
 /** The page's end of the socket, shared by every model runner. */
@@ -59,6 +61,7 @@ export class ModelPlayer {
     this.last = null;        // its last move
     this.moves = [];         // the moves to make this frame
     this.times = [];         // when each recent answer arrived, for decisions per second
+    this.took = [];          // how long its recent answers took, in seconds
     // what the decision panel shows
     this.shown = { move: null, probabilities: null, ms: null, rate: 0, error: null, decisions: 0 };
   }
@@ -85,6 +88,7 @@ export class ModelPlayer {
     this.pending = false;
     const s = this.shown;
     s.ms = m.ms ?? null;
+    if (m.ms != null) { this.took.push(m.ms / 1000); if (this.took.length > ANSWERS) this.took.shift(); }
     if (m.type !== 'move') { s.error = m.error || 'no answer'; this.wait = RETRY; return; }
     s.error = null;
     s.move = m.move;
@@ -98,15 +102,22 @@ export class ModelPlayer {
   }
 }
 
-/** What a runner sees, in the shape server's models.question() reads. */
+/** What a runner sees, in the shape server's models.question() reads. Every runner gets the same fields; only
+ *  its own position, and its own model's answer time, differ. */
 export function see(r, player) {
   const b = r.b, race = r.race;
+  const roof = b.grounded && b.y >= TRAIN.height - 0.3;
   const doing = [];
   if (b.laneT < 1) doing.push('changing lanes');
   if (r.player.flight) doing.push(r.player.flight.kind === 'jetpack' ? 'flying on a jetpack' : 'bouncing on a pogo stick');
-  else if (!b.grounded) doing.push('in the air');
-  else if (b.y >= TRAIN.height - 0.3) doing.push('running on a train roof');
-  if (b.rollT > 0) doing.push('rolling');
+  else if (!b.grounded) {
+    // when it lands on what is under it now, under gravity alone
+    const ground = r.ctx.level.supportHeight(b.x, b.z, HW, b.y);
+    const t = (b.vy + Math.sqrt(Math.max(0, b.vy * b.vy + 2 * PHYS.gravity * (b.y - ground)))) / PHYS.gravity;
+    doing.push(`in the air, landing in ${t.toFixed(2)} s`);
+  } else if (roof) doing.push('running on a train roof');
+  if (b.rollT > 0) doing.push(b.grounded ? `rolling, standing up in ${b.rollT.toFixed(2)} s` : 'dropping to roll as it lands');
+  if (r.timers.sneakers > 0) doing.push(`wearing spring shoes (jumps clear trains) for ${r.timers.sneakers.toFixed(0)} s more`);
   if (!doing.length) doing.push('running');
 
   const lanes = [[], [], []];
@@ -120,16 +131,20 @@ export function see(r, player) {
   }
   for (const l of lanes) l.sort((p, q) => p.at - q.at);
 
-  // the runners just ahead and just behind
+  // every other runner still in the race, nearest first
+  const others = race.order
+    .filter((o) => o !== r && o.alive)
+    .map((o) => ({ name: o.name, gap: +(b.z - o.b.z).toFixed(1), lane: o.b.lane, down: o.status === 'down' }))
+    .sort((p, q) => Math.abs(p.gap) - Math.abs(q.gap));
   const order = race.order.filter((o) => o.alive);
-  const i = order.indexOf(r);
-  const near = (o) => o && { name: o.name, gap: +Math.abs(o.b.z - b.z).toFixed(1), lane: o.b.lane };
+  const took = player.took;
   return {
-    lane: b.lane, doing, speed: +r.speed.toFixed(1),
+    lane: b.lane, doing, roof, speed: +r.speed.toFixed(1),
+    answer: took.length ? +(took.reduce((x, y) => x + y, 0) / took.length).toFixed(2) : null,
     last: player.last,
-    place: i + 1, of: order.length,
-    ahead: near(order[i - 1]), behind: near(order[i + 1]),
-    edge: +Math.max(0, race.collapse.z - b.z).toFixed(1),
+    place: order.indexOf(r) + 1, of: order.length,
+    others,
+    edge: +Math.max(0, race.collapse.z - b.z).toFixed(1), edgeSpeed: +race.collapse.speed.toFixed(1),
     lanes,
   };
 }
