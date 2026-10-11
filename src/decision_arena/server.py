@@ -203,7 +203,14 @@ def main(argv: list[str] | None = None) -> None:
         models = [None if n == "bot" else PLAYERS[n]() for n in names]
     except apis.MissingKey as exc:
         parser.error(str(exc))
-    print("Players: " + ", ".join(m.name if m else "bot" for m in models), flush=True)
+    if not names:
+        print(
+            "No model has a key set, so four built-in bots race. Add a key to .env, or install "
+            "Laya: uv tool install 'laya[serve]'",
+            flush=True,
+        )
+    else:
+        print("Players: " + ", ".join(m.name if m else "bot" for m in models), flush=True)
     models += [None] * (runners - len(models))
     url = f"http://127.0.0.1:{args.port}/?runners={runners}"
     print(f"Decision Arena at {url}", flush=True)
