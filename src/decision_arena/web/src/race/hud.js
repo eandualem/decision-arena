@@ -68,7 +68,7 @@ ${FONT_CSS}
 const MOVES = ['left', 'right', 'jump', 'roll', 'keep'];
 const MOVE_LABEL = { left: 'left', right: 'right', jump: 'jump', roll: 'roll', keep: 'keep going' };
 
-const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
+const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
 
 export class Hud {
   constructor(ctx, race, { onStart }) {

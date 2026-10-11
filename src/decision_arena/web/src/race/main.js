@@ -38,20 +38,19 @@ const BOT_LAGS = [0, 0.12, 0.25, 0.4, 0.6, 0.8, 0.3, 0.5, 0.7];   // seconds: bo
  *  bot); a model seat is named after its model and asks it through the gateway. */
 function seats(n, players) {
   const gateway = players.some((p) => p.name) ? new Gateway(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`) : null;
+  // A model and its image twin share a character, whichever is seated first; the twin wears the second outfit.
+  const base = (i) => players[i]?.name?.replace(/ image$/, '') ?? `bot ${i}`;
+  const looks = new Map();
+  for (let i = 0; i < n; i++) if (!looks.has(base(i))) looks.set(base(i), looks.size);
   const out = [];
-  let next = 0;   // the next character for a seat that isn't an image twin
   for (let i = 0; i < n; i++) {
-    const model = players[i]?.name, image = !!players[i]?.image;
-    // an image twin wears its model's character in that character's second outfit
-    const twin = image ? out.find((s) => s.name === model.replace(/ image$/, '')) : null;
-    const look = twin ? twin.look : LOOKS[next++ % LOOKS.length];
-    const second = twin || next > LOOKS.length;
+    const model = players[i]?.name, image = !!players[i]?.image, k = looks.get(base(i));
+    const look = LOOKS[k % LOOKS.length];
     out.push({
       name: model || look.character[0].toUpperCase() + look.character.slice(1),
       color: COLORS[i],
-      look,
       character: look.character,
-      outfit: second ? look.alt : null,
+      outfit: image || k >= LOOKS.length ? look.alt : null,
       controller: model ? (runner) => new ModelPlayer(runner, i, gateway, image) : (runner) => new Bot(runner, BOT_LAGS[i]),
     });
   }
