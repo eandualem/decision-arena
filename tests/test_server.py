@@ -1,6 +1,9 @@
+import asyncio
 import json
 
+import pytest
 from starlette.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from decision_arena.models import Answer
 from decision_arena.server import app
@@ -17,6 +20,28 @@ class Fake:
     async def decide(self, question):
         self.asked.append(question)
         return Answer("roll", {"left": 0, "right": 0, "jump": 0.1, "roll": 0.9, "keep": 0})
+
+
+class Slow:
+    """Answers its first question only after a long wait, every later one at once."""
+
+    name = "Slow"
+
+    def __init__(self):
+        self.calls = 0
+
+    async def decide(self, question):
+        self.calls += 1
+        if self.calls == 1:
+            await asyncio.sleep(30)
+        return Answer("jump", {"left": 0, "right": 0, "jump": 1.0, "roll": 0, "keep": 0})
+
+
+HERE = {"host": "127.0.0.1:8000", "origin": "http://127.0.0.1:8000"}  # the page, on this computer
+
+
+def local(models):
+    return TestClient(app(models))
 
 
 class Broken:
@@ -37,9 +62,9 @@ def test_serves_the_race_page_and_its_modules():
 
 def test_a_model_seat_answers_the_question_its_runner_asks(seen):
     fake = Fake()
-    client = TestClient(app([fake, None]))
+    client = local([fake, None])
     assert client.get("/players.json").json() == [{"name": "Fake"}, {"name": None}]
-    with client.websocket_connect("/ws") as ws:
+    with client.websocket_connect("/ws", headers=HERE) as ws:
         ws.send_text(json.dumps({"type": "ask", "seat": 0, "seq": 7, "seen": seen}))
         reply = json.loads(ws.receive_text())
     assert reply["type"] == "move" and reply["move"] == "roll" and reply["seq"] == 7
@@ -48,8 +73,30 @@ def test_a_model_seat_answers_the_question_its_runner_asks(seen):
 
 
 def test_a_failed_answer_is_reported_to_the_runner(seen):
-    client = TestClient(app([Broken()]))
-    with client.websocket_connect("/ws") as ws:
+    client = local([Broken()])
+    with client.websocket_connect("/ws", headers=HERE) as ws:
         ws.send_text(json.dumps({"type": "ask", "seat": 0, "seq": 1, "seen": seen}))
         reply = json.loads(ws.receive_text())
     assert reply == reply | {"type": "error", "seat": 0, "seq": 1, "error": "HTTP 500: inference failed"}
+
+
+@pytest.mark.parametrize(
+    "headers",
+    [
+        HERE | {"origin": "https://example.com"},  # another site open in the browser
+        {"host": "rebound.example:8000", "origin": "http://rebound.example:8000"},  # a renamed host
+    ],
+)
+def test_only_this_page_on_this_computer_may_ask(headers):
+    with pytest.raises(WebSocketDisconnect) as closed:
+        with local([Fake()]).websocket_connect("/ws", headers=headers):
+            pass
+    assert closed.value.code == 1008
+
+
+def test_a_new_question_replaces_one_still_in_flight(seen):
+    with local([Slow()]).websocket_connect("/ws", headers=HERE) as ws:
+        ws.send_text(json.dumps({"type": "ask", "seat": 0, "seq": 1, "seen": seen}))
+        ws.send_text(json.dumps({"type": "ask", "seat": 0, "seq": 2, "seen": seen}))
+        reply = json.loads(ws.receive_text())
+    assert reply["seq"] == 2 and reply["move"] == "jump"

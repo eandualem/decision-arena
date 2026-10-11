@@ -67,6 +67,13 @@ def test_openai_request_and_answer():
     assert answer.move == "left" and answer.probabilities["left"] == 0.7
 
 
+def test_five_probabilities_rounded_to_two_decimals_may_sum_to_098():
+    reply = {"answers": {"move": {"choice": "left", "probabilities": dict(zip(
+        ("left", "right", "jump", "roll", "keep"), (0.2, 0.2, 0.2, 0.2, 0.18), strict=True))}}}
+    answer, _ = ask("systemone", reply)
+    assert answer.move == "left"
+
+
 def test_malformed_answer_raises_so_the_runner_asks_again():
     bad = {"answers": {"move": {"choice": "up", "probabilities": {"left": 1.0}}}}
     with pytest.raises(ValueError):

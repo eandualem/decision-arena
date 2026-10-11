@@ -45,6 +45,14 @@ def app(models: list[Model | None] | None = None) -> Starlette:
         return JSONResponse([{"name": m.name if m else None} for m in seats])
 
     async def socket(websocket: WebSocket) -> None:
+        # Only this page may ask: any other site open in the browser could otherwise spend the
+        # models' keys. The host must be this computer too, so a renamed host cannot pass.
+        host, origin = websocket.headers.get("host", ""), websocket.headers.get("origin")
+        if host.rsplit(":", 1)[0] not in ("127.0.0.1", "localhost") or (
+            origin is not None and origin != f"http://{host}"
+        ):
+            await websocket.close(code=1008)
+            return
         await websocket.accept()
         send = asyncio.Lock()
         asking: dict[int, asyncio.Task[None]] = {}
@@ -67,14 +75,15 @@ def app(models: list[Model | None] | None = None) -> Starlette:
             while True:
                 message = json.loads(await websocket.receive_text())
                 seat = message.get("seat")
-                # one question in flight per runner; anything else is ignored
+                # one question in flight per runner: a new one (a new race's) replaces the last
                 if (
                     message.get("type") == "ask"
                     and isinstance(seat, int)
                     and 0 <= seat < len(seats)
                     and seats[seat] is not None
-                    and (seat not in asking or asking[seat].done())
                 ):
+                    if seat in asking:
+                        asking[seat].cancel()
                     asking[seat] = asyncio.create_task(ask(seat, message.get("seq"), message["seen"]))
         except (WebSocketDisconnect, ValueError, KeyError, TypeError):
             pass

@@ -71,7 +71,8 @@ export class ModelPlayer {
     for (const a of this.moves) out.push(a);
     this.moves.length = 0;
     const r = this.runner;
-    if (!this.pending && this.wait <= 0 && r.active && r.race.state === 'running') {
+    // a move just answered is made this frame, so the next question waits a frame and shows it made
+    if (!out.length && !this.pending && this.wait <= 0 && r.active && r.race.state === 'running') {
       if (this.gateway.ask(this.seat, ++this.seq, see(r, this))) this.pending = true;
     }
     while (this.times.length && this.times[0] < this.t - RATE_WINDOW) this.times.shift();

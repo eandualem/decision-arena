@@ -95,7 +95,8 @@ def _detail(response: httpx.Response, key: str) -> str:
 
 def _answer(data: Any, shape: str) -> Answer:
     """The validated choice and probabilities. Jev rounds each probability to two
-    decimals, so three can sum to 0.99; anything unusable raises, and the runner asks again."""
+    decimals, so five can sum to 0.98, as Entune allows; anything unusable raises, and the
+    runner asks again."""
     answers = data.get("answers") if isinstance(data, dict) else None
     if shape == "openai" and isinstance(answers, list):
         answers = {
@@ -122,7 +123,7 @@ def _answer(data: Any, shape: str) -> Answer:
             type(p) in (int, float) and math.isfinite(p) and 0 <= p <= 1
             for p in probabilities.values()
         )
-        or not math.isclose(sum(probabilities.values()), 1.0, abs_tol=0.015)
+        or not math.isclose(sum(probabilities.values()), 1.0, abs_tol=0.005 * len(MOVES))
         or choice not in MOVES
     ):
         raise ValueError("unusable answer: choice or probabilities malformed")
