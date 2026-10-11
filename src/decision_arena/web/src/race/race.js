@@ -21,7 +21,7 @@ export const RACE = {
 };
 
 // Starting slots, front row first; the middle lane leads each row.
-const SLOTS = [[0, 0], [-1, 0], [1, 0], [0, 1], [-1, 1], [1, 1]];
+const SLOTS = [[0, 0], [-1, 0], [1, 0], [0, 1], [-1, 1], [1, 1], [0, 2], [-1, 2], [1, 2]];
 
 // The grid rotation is kept across reloads and restarts, so a reload does not put everyone back on their first slot.
 const ROTATION = 'decision-arena.races';
@@ -86,10 +86,11 @@ export class Race {
     const ctx = this.ctx;
     ctx.level.reset({});
     ctx.env.reset?.();
-    // Rotate the slots each race, so over several races everyone starts from every slot.
-    const n = this.runners.length;
+    // Rotate the slots each race, so over several races everyone starts from every slot. Nine runners move one
+    // row back and one lane across instead: over three races each starts once in every row and every lane.
+    const n = this.runners.length, k = this.races;
     this.runners.forEach((r, i) => {
-      const [lane, row] = SLOTS[(i + this.races) % n];
+      const [lane, row] = n === 9 ? SLOTS[((Math.floor(i / 3) + k) % 3) * 3 + (i + k) % 3] : SLOTS[(i + k) % n];
       r.reset(lane, row * RACE.gridRow);
     });
     this.order = this.runners.slice();

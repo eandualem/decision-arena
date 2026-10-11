@@ -39,9 +39,10 @@ race, so you can still see the game.
 The page opens in your browser. Press Space to start a race, D to show or hide
 the decision panel, and C to switch camera.
 
-By default every model with a key races, up to six, except d1-3B (see below). Choose players with
+By default every model with a key races, with the image twins (see below), up to nine
+runners, except d1-3B. Choose players with
 `--players`, for example `uv run decision-arena --players jev,openai,laya`.
-`--runners` sets the number of runners (two to six); `bot` fills a seat with a
+`--runners` sets the number of runners (two to nine); `bot` fills a seat with a
 built-in runner that isn't a model. `--port` and `--no-browser` do what they
 say.
 
@@ -53,6 +54,8 @@ say.
 | `laya` | Laya, on your computer | none: install it with `uv tool install 'laya[serve]'` |
 | `d1` | Liquid d1-3B, on your computer, only when named | none: needs llama.cpp build 11483 or newer (see below) |
 | `clef` | Cloudflare Clef-flash on Workers AI | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_AUTH_TOKEN` |
+| `aplomb` | Aplomb 1 at EmpirioLabs | `EMPIRIO_LABS_API_KEY` |
+| `openai-image`, `perplexity-image`, `clef-image`, `aplomb-image` | the same model as its image twin | its model's key |
 | `microsoft` | Microsoft Decision-1, through Vercel's AI Gateway | `AI_GATEWAY_API_KEY` |
 | `liquid` | Liquid D1, through Vercel's AI Gateway | `AI_GATEWAY_API_KEY` |
 
@@ -86,11 +89,12 @@ on screen.
 
 - **Same track.** Every runner in a race runs the same track from a shared
   start. Each race gets a new track.
-- **Every start slot.** The grid has three slots in the front row and three
-  just behind it. The slots rotate one place every race, so over as many races
-  as there are runners (five races for five models), each model starts once
-  from every slot. The rotation carries on across page reloads and server
-  restarts.
+- **Every start slot.** The grid has up to three rows of three slots. The
+  slots rotate one place every race, so over as many races as there are runners
+  (five races for five models), each model starts once from every slot. Nine
+  runners move one row back and one lane across each race instead, so over
+  three races each starts once in every row and every lane. The rotation
+  carries on across page reloads and server restarts.
 - **Same question.** Every model is asked by the same code, with the same
   fields and the same wording. Only the runner's own position and its own
   model's answer time differ.
@@ -151,6 +155,19 @@ window.
 | `roll` | roll: slides under high barriers |
 | `keep` | keep going as you are |
 
+### Image twins
+
+OpenAI, Perplexity, Clef and Aplomb accept images, so each also races as its
+image twin, in the same race as the model itself. A twin gets the same question,
+with one extra sentence, "A picture of your view, from just behind and above
+you, looking ahead, is attached.", and the picture: a 512 x 288 render of its
+runner's own view, taken when the question is sent. Nothing else differs, so
+the race shows whether seeing helps each model. Jev and Laya don't take images
+and race on text alone. An image twin wears its model's character in a second
+outfit.
+
+![What an image twin sees: its own runner from just behind, and the lanes ahead](docs/images/runner-view.jpg)
+
 ### What goes into the state
 
 In this order:
@@ -181,7 +198,7 @@ stepping its physics (`gameplay/physics.js`) at 14, 20 and 28 m/s.
 
 ### The request
 
-Jev, Perplexity, Clef, Laya and d1-3B take the System One request shape:
+Jev, Perplexity, Clef, Aplomb, Laya and d1-3B take the System One request shape:
 
 ```json
 {
@@ -225,6 +242,16 @@ same text, with the moves as a list:
 ```
 
 (The example lists two of the five choices; every request sends all five.)
+
+An image twin's request adds the picture as a base64 JPEG, in the form each API
+reads, each checked with a test picture:
+
+| API | Where the picture goes |
+|---|---|
+| OpenAI | `input` becomes a user message: `{"type": "input_text", ...}` and `{"type": "input_image", "image_url": "data:image/jpeg;base64,..."}` |
+| Perplexity | `state` becomes `[text, {"type": "image_url", "image_url": {"url": "data:..."}}]` |
+| Clef | an `images` list next to `state`: `["data:image/jpeg;base64,..."]` |
+| Aplomb | `state` becomes `[text, {"type": "image", "data": "<base64>", "mime": "image/jpeg"}]` |
 
 ![The decision panel: each model's move, probabilities, latency, decisions per second and record](docs/images/race.jpg)
 
