@@ -240,9 +240,10 @@ that view is attached; nothing else differs between the twins.
 The default race is the image twins and the text models with keys, up to
 nine runners: on a full set of keys, Jev, the four image models and their
 twins. Laya joins when there is room. Nine runners start three rows of
-three. Each race moves every runner one row back and one lane across, so
-over three races each starts once in every row and every lane. That isn't
-every slot, but it is fair by row and by lane.
+three. Each race moves every runner one row back and one lane across, and
+every third race one more lane, so over three races each starts once in
+every row and every lane, and over nine races once from every slot. Three
+races were too few: the start slot still shaped the finishing order.
 
 With more than six model runners, the decision panel shows each model's
 move and its probability, latency, decisions per second and record, without

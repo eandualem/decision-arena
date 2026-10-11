@@ -87,10 +87,13 @@ export class Race {
     ctx.level.reset({});
     ctx.env.reset?.();
     // Rotate the slots each race, so over several races everyone starts from every slot. Nine runners move one
-    // row back and one lane across instead: over three races each starts once in every row and every lane.
+    // row back and one lane across instead, with one more lane every third race: over three races each starts once
+    // in every row and every lane, and over nine once from every slot.
     const n = this.runners.length, k = this.races;
     this.runners.forEach((r, i) => {
-      const [lane, row] = n === 9 ? SLOTS[((Math.floor(i / 3) + k) % 3) * 3 + (i + k) % 3] : SLOTS[(i + k) % n];
+      const [lane, row] = n === 9
+        ? SLOTS[((Math.floor(i / 3) + k) % 3) * 3 + (i + k + Math.floor((k % 9) / 3)) % 3]
+        : SLOTS[(i + k) % n];
       r.reset(lane, row * RACE.gridRow);
     });
     this.order = this.runners.slice();
