@@ -38,7 +38,7 @@ ${FONT_CSS}
   color: #fff; background: linear-gradient(#ff5fa2, #e8337d); border: 0; border-radius: 16px; padding: 12px 28px;
   box-shadow: 0 6px 0 #a3185a, 0 10px 24px rgba(0,0,0,.3); cursor: pointer; }
 #hud button:active { transform: translate(-50%, 3px); box-shadow: 0 3px 0 #a3185a; }
-#hud .panel { position: absolute; right: 14px; top: 14px; display: flex; flex-direction: column; gap: 8px; width: 236px; }
+#hud .panel { position: absolute; right: 14px; top: 14px; display: flex; flex-direction: column; gap: 8px; width: 248px; }
 #hud .panel[hidden] { display: none; }
 #hud .card { background: rgba(12, 10, 32, .66); border-radius: 14px; padding: 8px 10px 9px; backdrop-filter: blur(6px);
   box-shadow: 0 6px 24px rgba(0,0,0,.25); border-left: 4px solid currentColor; }
@@ -54,9 +54,9 @@ ${FONT_CSS}
 #hud .card .bar span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
 #hud .card .stats { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; font-weight: 800;
   font-variant-numeric: tabular-nums; color: rgba(255,255,255,.85); }
-#hud .card .record { margin-top: 3px; font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums;
-  color: rgba(255,255,255,.7); white-space: nowrap; }
-#hud .card .record:empty { display: none; }
+#hud .card .record { margin-top: 3px; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: rgba(255,255,255,.7); white-space: nowrap; display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 6px; }
+#hud .card .record[hidden] { display: none; }
 #hud .card .err { font-size: 11px; color: #ff9c9c; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `;
 const MOVES = ['left', 'right', 'jump', 'roll', 'keep'];
@@ -129,7 +129,7 @@ export class Hud {
       card.style.color = r.color;
       card.innerHTML = `<div class="head"><span class="name"></span><span class="move"></span></div>
         ${MOVES.map((m) => `<div class="bar" data-m="${m}"><span>${m}</span><i><b></b></i><span></span></div>`).join('')}
-        <div class="stats"><span class="ms"></span><span class="rate"></span></div><div class="record"></div><div class="err"></div>`;
+        <div class="stats"><span class="ms"></span><span class="rate"></span></div><div class="record" hidden><span></span><span></span></div><div class="err"></div>`;
       card.querySelector('.name').textContent = r.name;
       this.panel.appendChild(card);
       this.cards.set(r, card);
@@ -160,8 +160,10 @@ export class Hud {
     for (const r of order) {
       const rec = this.records.get(r.name), card = this.cards.get(r);
       const p = (i) => rec.places[i] || 0;
-      card.querySelector('.record').textContent =
-        `${rec.races} race${rec.races > 1 ? 's' : ''} · 1st ${p(0)} · 2nd ${p(1)} · 3rd ${p(2)} · ${Math.round(rate(rec))} coins/min`;
+      const record = card.querySelector('.record');
+      record.hidden = false;
+      record.firstElementChild.textContent = `${rec.races} race${rec.races > 1 ? 's' : ''} · 1st ${p(0)} · 2nd ${p(1)} · 3rd ${p(2)}`;
+      record.lastElementChild.textContent = `${Math.round(rate(rec))} coins/min`;   // its own line when the counts get long
       this.panel.appendChild(card);
     }
   }
