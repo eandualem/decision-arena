@@ -27,8 +27,10 @@ watch and practical for only two to four players.
 ## 2. The race
 
 - **Start.** Up to six runners start on a staggered grid across the three
-  lanes, two rows deep. The slots rotate from race to race, so everyone gets
-  every start.
+  lanes, two rows deep. The slots rotate from race to race, so over as many
+  races as there are runners everyone starts once from every slot. The page
+  keeps the count in the browser, so a reload or a restarted server carries
+  on the rotation instead of starting it again.
 - **Speed.** Everyone shares a base speed that rises over the race. Each
   runner's pace rises while it runs cleanly (up to +10%) and with the boost
   pickup, and drops for a moment after a stumble, so the better runner pulls

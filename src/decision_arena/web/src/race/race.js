@@ -2,6 +2,7 @@
 // runners bumping and passing each other, the ground collapsing behind them, places and the finish.
 // Other systems read `info` (world streaming, effects, audio) and `rig` (effects anchors): both follow the pack.
 import { EV } from '../core/events.js';
+import { storage } from '../core/storage.js';
 import { SPEED, PHYS, PLAYER } from '../config.js';
 import { HW, HD } from '../gameplay/physics.js';
 import { Collapse } from './collapse.js';
@@ -22,6 +23,9 @@ export const RACE = {
 // Starting slots, front row first; the middle lane leads each row.
 const SLOTS = [[0, 0], [-1, 0], [1, 0], [0, 1], [-1, 1], [1, 1]];
 
+// The grid rotation is kept across reloads and restarts, so a reload does not put everyone back on their first slot.
+const ROTATION = 'decision-arena.races';
+
 export class Race {
   constructor(ctx) {
     this.ctx = ctx;
@@ -36,7 +40,7 @@ export class Race {
     this.runners = [];
     this.order = [];
     this.rig = null;
-    this.races = 0;
+    this.races = storage.get(ROTATION, 0) | 0;
     this.t = 0;
     this.base = 0;
     this.winner = null;
@@ -104,6 +108,7 @@ export class Race {
   go() {
     if (this.state !== 'menu' && this.state !== 'gameover') return;
     if (this.state === 'gameover') { this.races++; this.toGrid(); }
+    storage.set(ROTATION, this.races + 1);   // the next race, even after a reload, starts one slot on
     this.countdown.n = 3; this.countdown.t = 0;
     this.camera.toFollow(RACE.countdown * 3);
     this._set('intro');
