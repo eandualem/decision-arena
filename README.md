@@ -92,9 +92,9 @@ on screen.
 - **Every start slot.** The grid has up to three rows of three slots. The
   slots rotate one place every race, so over as many races as there are runners
   (five races for five models), each model starts once from every slot. Nine
-  runners move one row back and one lane across each race instead, so over
-  three races each starts once in every row and every lane. The rotation
-  carries on across page reloads and server restarts.
+  runners move one row back and one lane across each race, and every third race
+  one more lane, so over nine races each starts once from every slot. The
+  rotation carries on across page reloads and server restarts.
 - **Same question.** Every model is asked by the same code, with the same
   fields and the same wording. Only the runner's own position and its own
   model's answer time differ.
