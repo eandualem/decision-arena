@@ -63,7 +63,10 @@ def test_serves_the_race_page_and_its_modules():
 def test_a_model_seat_answers_the_question_its_runner_asks(seen):
     fake = Fake()
     client = local([fake, None])
-    assert client.get("/players.json").json() == [{"name": "Fake"}, {"name": None}]
+    assert client.get("/players.json").json() == [
+        {"name": "Fake", "image": False},
+        {"name": None, "image": False},
+    ]
     with client.websocket_connect("/ws", headers=HERE) as ws:
         ws.send_text(json.dumps({"type": "ask", "seat": 0, "seq": 7, "seen": seen}))
         reply = json.loads(ws.receive_text())

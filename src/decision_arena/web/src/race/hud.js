@@ -57,12 +57,18 @@ ${FONT_CSS}
 #hud .card .record { margin-top: 3px; font-size: 10px; font-weight: 800; font-variant-numeric: tabular-nums;
   color: rgba(255,255,255,.7); white-space: nowrap; display: flex; flex-wrap: wrap; justify-content: space-between; column-gap: 6px; }
 #hud .card .record[hidden] { display: none; }
+#hud .panel.compact { gap: 5px; }
+#hud .panel.compact .card { padding: 5px 9px 6px; }
+#hud .panel.compact .card .bar { display: none; }   /* more than six models: the move and its probability only */
+#hud .panel.compact .card .head .move { font-size: 14px; }
+#hud .card .head .prob { font-size: 12px; font-weight: 800; color: rgba(255,255,255,.75); display: none; }
+#hud .panel.compact .card .head .prob { display: inline; }
 #hud .card .err { font-size: 11px; color: #ff9c9c; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `;
 const MOVES = ['left', 'right', 'jump', 'roll', 'keep'];
 const MOVE_LABEL = { left: 'left', right: 'right', jump: 'jump', roll: 'roll', keep: 'keep going' };
 
-const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
+const ORDINAL = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th'];
 
 export class Hud {
   constructor(ctx, race, { onStart }) {
@@ -127,7 +133,7 @@ export class Hud {
       const card = document.createElement('div');
       card.className = 'card';
       card.style.color = r.color;
-      card.innerHTML = `<div class="head"><span class="name"></span><span class="move"></span></div>
+      card.innerHTML = `<div class="head"><span class="name"></span><span class="move"></span><span class="prob"></span></div>
         ${MOVES.map((m) => `<div class="bar" data-m="${m}"><span>${m}</span><i><b></b></i><span></span></div>`).join('')}
         <div class="stats"><span class="ms"></span><span class="rate"></span></div><div class="record" hidden><span></span><span></span></div><div class="err"></div>`;
       card.querySelector('.name').textContent = r.name;
@@ -135,6 +141,7 @@ export class Hud {
       this.cards.set(r, card);
     }
     this.panel.hidden = !this.cards.size;
+    this.panel.classList.toggle('compact', this.cards.size > 6);
   }
 
   /** At each finish: add every model's result to its record, and order the cards by record. A race ends when one
@@ -176,6 +183,7 @@ export class Hud {
       const s = r.controller.shown;
       card.classList.toggle('out', r.status === 'caught');
       card.querySelector('.move').textContent = s.move ? MOVE_LABEL[s.move] : '…';
+      card.querySelector('.prob').textContent = s.move && s.probabilities ? `${Math.round(s.probabilities[s.move] * 100)}%` : '';
       for (const bar of card.querySelectorAll('.bar')) {
         const p = s.probabilities?.[bar.dataset.m] ?? 0;
         bar.classList.toggle('on', bar.dataset.m === s.move);

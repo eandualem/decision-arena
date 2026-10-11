@@ -1,5 +1,7 @@
 """Decision models behind an HTTP API: Jev at TypeSafe, OpenAI's and Perplexity's Decisions
-APIs, Cloudflare's Clef, and Microsoft's and Liquid's through Vercel's AI Gateway.
+APIs, Cloudflare's Clef, EmpirioLabs' Aplomb, and Microsoft's and Liquid's through Vercel's
+AI Gateway. OpenAI, Perplexity, Clef and Aplomb also race as image twins, which get a picture
+of their runner's view with the question; each API takes the picture its own way.
 
 They take the request shape Entune uses (TypeSafe's System One API): a shared `state`,
 and named choice questions whose options are described in text. OpenAI takes the same
@@ -36,9 +38,11 @@ class DecisionAPI:
         transport: httpx.AsyncBaseTransport | None = None,
         local: bool = False,  # on this computer: reached directly, never through a proxy
         key_name: str | None = None,  # where the key comes from, to say which one failed
+        image: str | None = None,  # an image twin: how this API takes the picture (see _with_image)
     ) -> None:
         self.name, self._url, self._model, self._shape = name, url, model, shape
         self.key_name = key_name
+        self.image = image
         self._key = key
         self._http = httpx.AsyncClient(
             transport=transport,
@@ -57,6 +61,12 @@ class DecisionAPI:
         await self._http.aclose()
 
     def _request(self, question: Question) -> dict[str, Any]:
+        request = self._text_request(question)
+        if self.image and question.image:
+            _with_image(request, self.image, question.image)
+        return request
+
+    def _text_request(self, question: Question) -> dict[str, Any]:
         if self._shape == "openai":
             return {
                 "model": self._model,
@@ -84,6 +94,31 @@ class DecisionAPI:
                 }
             },
         }
+
+
+def _with_image(request: dict[str, Any], how: str, image: str) -> None:
+    """Add the picture (a data URI) the way each API reads it, all checked against a test
+    picture: OpenAI, a user message with the text and the image; Perplexity, an image part
+    after the text in `state`; Clef, an `images` list; Aplomb, an image node in `state`."""
+    text = request.pop("input") if how == "message" else request["state"]
+    if how == "message":
+        request["input"] = [
+            {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": text},
+                    {"type": "input_image", "image_url": image},
+                ],
+            }
+        ]
+    elif how == "part":
+        request["state"] = [text, {"type": "image_url", "image_url": {"url": image}}]
+    elif how == "images":
+        request["images"] = [image]
+    elif how == "node":
+        mime, data = image.removeprefix("data:").split(";base64,", 1)
+        request["state"] = [text, {"type": "image", "data": data, "mime": mime}]
 
 
 def _detail(response: httpx.Response, key: str) -> str:
@@ -144,26 +179,44 @@ def _key(variable: str, name: str) -> str:
     return key
 
 
-def _api(name: str, url: str, model: str, variable: str, shape: str = "systemone") -> DecisionAPI:
-    return DecisionAPI(name, url, model, _key(variable, name), shape, key_name=variable)
+def _api(
+    name: str, url: str, model: str, variable: str, shape: str = "systemone",
+    image: str | None = None,
+) -> DecisionAPI:
+    if image:
+        name += " image"
+    return DecisionAPI(name, url, model, _key(variable, name), shape, key_name=variable, image=image)
 
 
 def jev() -> DecisionAPI:
     return _api("Jev", "https://api.typesafe.ai/v1/systemone", "jev-1.13.0", "TYPESAFE_API_KEY")
 
 
-def openai() -> DecisionAPI:
+def openai(image: bool = False) -> DecisionAPI:
     return _api(
-        "OpenAI", "https://api.openai.com/v1/decisions", "gpt-6-luna", "OPENAI_API_KEY", "openai"
+        "OpenAI", "https://api.openai.com/v1/decisions", "gpt-6-luna", "OPENAI_API_KEY", "openai",
+        "message" if image else None,
     )
 
 
-def perplexity() -> DecisionAPI:
+def perplexity(image: bool = False) -> DecisionAPI:
     return _api(
         "Perplexity",
         "https://api.perplexity.ai/v1/decisions",
         "pplx-decider-v1.1-27b",
         "PERPLEXITY_API_KEY",
+        image="part" if image else None,
+    )
+
+
+def aplomb(image: bool = False) -> DecisionAPI:
+    """EmpirioLabs' Aplomb 1, which takes Jev's request shape."""
+    return _api(
+        "Aplomb",
+        "https://api.empiriolabs.ai/v1/decisions",
+        "aplomb-1",
+        "EMPIRIO_LABS_API_KEY",
+        image="node" if image else None,
     )
 
 
@@ -181,7 +234,7 @@ def liquid() -> DecisionAPI:
     return _api("Liquid", GATEWAY, "liquid/d1", "AI_GATEWAY_API_KEY", "openai")
 
 
-def clef() -> DecisionAPI:
+def clef(image: bool = False) -> DecisionAPI:
     """Cloudflare's Clef-flash, its fast decision model, on Workers AI."""
     account = _key("CLOUDFLARE_ACCOUNT_ID", "Clef")
     return _api(
@@ -189,4 +242,5 @@ def clef() -> DecisionAPI:
         f"https://api.cloudflare.com/client/v4/accounts/{account}/ai/run/@cf/cloudflare/clef-flash",
         "clef-flash",
         "CLOUDFLARE_AUTH_TOKEN",
+        image="images" if image else None,
     )

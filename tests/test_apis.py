@@ -102,3 +102,42 @@ def test_missing_key_names_the_variable(monkeypatch):
     monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
     with pytest.raises(apis.MissingKey, match="TYPESAFE_API_KEY"):
         apis.jev()
+
+
+PICTURE = "data:image/jpeg;base64,/9j/AAAA"
+
+
+@pytest.mark.parametrize(
+    "shape, image, where",
+    [
+        ("openai", "message", lambda b: b["input"][0]["content"][1]),
+        ("systemone", "part", lambda b: b["state"][1]),
+        ("systemone", "images", lambda b: b["images"][0]),
+        ("systemone", "node", lambda b: b["state"][1]),
+    ],
+)
+def test_an_image_twin_sends_its_picture_the_way_its_api_reads_it(shape, image, where):
+    sent = {}
+
+    def handle(request):
+        sent["body"] = json.loads(request.content)
+        return httpx.Response(400, json={"error": "stop here"})
+
+    model = apis.DecisionAPI("Test", "https://example.test/v1", "m", KEY, shape,
+                             httpx.MockTransport(handle), image=image)
+    with pytest.raises(RuntimeError):
+        asyncio.run(model.decide(question(SEEN | {"image": PICTURE})))
+    body = sent["body"]
+    assert {
+        "message": {"type": "input_image", "image_url": PICTURE},
+        "part": {"type": "image_url", "image_url": {"url": PICTURE}},
+        "images": PICTURE,
+        "node": {"type": "image", "data": "/9j/AAAA", "mime": "image/jpeg"},
+    }[image] == where(body)
+    text = json.dumps(body)
+    assert "A picture of your view" in text and "You are in the middle lane" in text
+
+
+def test_a_text_model_sends_no_picture_even_when_one_is_seen():
+    _, sent = ask("systemone", SYSTEMONE, seen=SEEN | {"image": PICTURE})
+    assert "base64" not in json.dumps(sent["body"])

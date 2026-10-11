@@ -48,6 +48,7 @@ class Question:
     state: str
     options: dict[str, str]
     instructions: str = INSTRUCTIONS
+    image: str | None = None  # a JPEG data URI of the runner's view, for an image twin
 
 
 @dataclass(frozen=True)
@@ -69,16 +70,19 @@ def question(seen: dict[str, Any]) -> Question:
     answer (its model's recent answer time in seconds, or None before its first), last (its
     last move, or None), place, of, others (every other runner still racing: {name, gap
     (metres, ahead is positive), lane, down}), edge (metres behind) and edgeSpeed (m/s),
-    lanes (three lists, left to right, nearest first, of {kind, at, length, moving, speed}).
+    lanes (three lists, left to right, nearest first, of {kind, at, length, moving, speed}),
+    and, for an image twin, image (a JPEG data URI of the runner's view).
     """
     lane = int(seen["lane"])
     speed = float(seen["speed"])
     answer = seen.get("answer")
     doing = ", ".join(seen.get("doing") or ["running"])
-    parts = [
-        "A race on three train-track lanes, left, middle and right, all running forward.",
-        f"You are in the {LANES[lane]} lane, {doing}, at {speed:.0f} m/s.",
-    ]
+    parts = ["A race on three train-track lanes, left, middle and right, all running forward."]
+    if seen.get("image"):
+        parts.append(
+            "A picture of your view, from just behind and above you, looking ahead, is attached."
+        )
+    parts.append(f"You are in the {LANES[lane]} lane, {doing}, at {speed:.0f} m/s.")
     if answer is not None:
         parts.append(
             f"Your answers take about {answer:.2f} s, so your move is made about "
@@ -118,7 +122,7 @@ def question(seen: dict[str, Any]) -> Question:
         "roll": "roll: slides under high barriers",
         "keep": "keep going as you are",
     }
-    return Question(" ".join(parts), options)
+    return Question(" ".join(parts), options, image=seen.get("image") or None)
 
 
 def _lane(

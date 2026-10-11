@@ -2,6 +2,7 @@
 // through one WebSocket. Each model runner keeps one question in flight: it sends what it sees, applies the
 // move the moment the answer arrives, and asks again straight away, so a fast model decides more often than a
 // slow one and the race never waits for anyone (docs/decisions.md, 3 and 5).
+import * as THREE from 'three';
 import { TRAIN, PHYS } from '../config.js';
 import { HW } from '../gameplay/physics.js';
 
@@ -11,6 +12,7 @@ const RATE_WINDOW = 5;     // seconds over which decisions per second are counte
 const ANSWERS = 5;         // a model's answer time is the mean of its last this many
 const MOVE = { left: 'left', right: 'right', jump: 'up', roll: 'down', keep: null };
 const LANE = { '-1': 'left', 0: 'middle', 1: 'right' };
+const VIEW = { w: 512, h: 288, quality: 0.75 };   // an image twin's picture of its runner's view
 
 /** The page's end of the socket, shared by every model runner. */
 export class Gateway {
@@ -43,12 +45,47 @@ export class Gateway {
   }
 }
 
-/** Drives one runner with a decision model, through the gateway. Same shape as a Bot (race/bots.js). */
+/** An image twin's picture: its runner's view from just behind and above it, looking down its lanes, drawn
+ *  apart from the screen and read back without stalling the frame. */
+class RunnerView {
+  constructor(ctx) {
+    this.ctx = ctx;
+    this.cam = new THREE.PerspectiveCamera(60, VIEW.w / VIEW.h, 0.1, 400);
+    this.target = new THREE.WebGLRenderTarget(VIEW.w, VIEW.h);
+    this.target.texture.colorSpace = THREE.SRGBColorSpace;
+    this.pixels = new Uint8Array(VIEW.w * VIEW.h * 4);
+    this.canvas = document.createElement('canvas');
+    this.canvas.width = VIEW.w; this.canvas.height = VIEW.h;
+    this.image = this.canvas.getContext('2d').createImageData(VIEW.w, VIEW.h);
+  }
+
+  /** The picture now, as a JPEG data URI. */
+  async shoot(r) {
+    const b = r.b, R = this.ctx.renderer, cam = this.cam;
+    cam.position.set(b.x, b.y + 3.4, b.z + 6);
+    cam.lookAt(b.x, b.y + 0.8, b.z - 24);
+    const shadows = R.shadowMap.autoUpdate, before = R.getRenderTarget();
+    R.shadowMap.autoUpdate = false;   // this frame's shadows are already drawn
+    R.setRenderTarget(this.target);
+    R.render(this.ctx.scene, cam);
+    R.setRenderTarget(before);
+    R.shadowMap.autoUpdate = shadows;
+    await R.readRenderTargetPixelsAsync(this.target, 0, 0, VIEW.w, VIEW.h, this.pixels);
+    const row = VIEW.w * 4, out = this.image.data;
+    for (let y = 0; y < VIEW.h; y++) out.set(this.pixels.subarray((VIEW.h - 1 - y) * row, (VIEW.h - y) * row), y * row);
+    this.canvas.getContext('2d').putImageData(this.image, 0, 0);
+    return this.canvas.toDataURL('image/jpeg', VIEW.quality);
+  }
+}
+
+/** Drives one runner with a decision model, through the gateway. Same shape as a Bot (race/bots.js). An image
+ *  twin also sends a picture of its runner's view with each question. */
 export class ModelPlayer {
-  constructor(runner, seat, gateway) {
+  constructor(runner, seat, gateway, image = false) {
     this.runner = runner;
     this.seat = seat;
     this.gateway = gateway;
+    this.view = image ? new RunnerView(runner.ctx) : null;
     gateway.waiting.set(seat, this);
     this.out = [];
     this.reset();
@@ -77,7 +114,17 @@ export class ModelPlayer {
     const r = this.runner;
     // a move just answered is made this frame, so the next question waits a frame and shows it made
     if (!out.length && !this.pending && this.wait <= 0 && r.active && r.race.state === 'running') {
-      if (this.gateway.ask(this.seat, ++this.seq, see(r, this))) this.pending = true;
+      const seq = ++this.seq, seen = see(r, this);
+      if (!this.view) this.pending = this.gateway.ask(this.seat, seq, seen);
+      else {
+        // the picture is taken with the text, and the question goes once it is ready
+        this.pending = true;
+        this.view.shoot(r).then((image) => {
+          if (seq !== this.seq) return;   // a new race began meanwhile
+          seen.image = image;
+          if (!this.gateway.ask(this.seat, seq, seen)) this.pending = false;
+        }, () => { if (seq === this.seq) { this.pending = false; this.wait = RETRY; } });
+      }
     }
     while (this.times.length && this.times[0] < this.t - RATE_WINDOW) this.times.shift();
     this.shown.rate = this.times.length / Math.min(RATE_WINDOW, Math.max(this.t, 1));

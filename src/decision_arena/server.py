@@ -29,17 +29,24 @@ from decision_arena.models import Model, question
 WEB = Path(__file__).parent / "web"
 
 # The players the command knows, by the name you type, in the order it seats them when you
-# name none. "bot" is a seat without a model.
+# name none. "bot" is a seat without a model. A "-image" player is its model's image twin:
+# the same model, given a picture of its runner's view with the question.
 PLAYERS: dict[str, Callable[[], Model]] = {
     "jev": apis.jev,
     "openai": apis.openai,
+    "openai-image": lambda: apis.openai(image=True),
     "perplexity": apis.perplexity,
+    "perplexity-image": lambda: apis.perplexity(image=True),
+    "clef": apis.clef,
+    "clef-image": lambda: apis.clef(image=True),
+    "aplomb": apis.aplomb,
+    "aplomb-image": lambda: apis.aplomb(image=True),
     "laya": local.laya,
     "d1": local.d1,
-    "clef": apis.clef,
     "microsoft": apis.microsoft,
     "liquid": apis.liquid,
 }
+MOST = 9  # runners: three rows of three
 
 # Races only when named: on a 16 GB Mac, d1-3B beside the game drops it to a few frames a second.
 ON_REQUEST = {"d1"}
@@ -64,7 +71,12 @@ def app(models: list[Model | None] | None = None) -> Starlette:
     seats = models or []
 
     async def players(_request: Any) -> JSONResponse:
-        return JSONResponse([{"name": m.name if m else None} for m in seats])
+        return JSONResponse(
+            [
+                {"name": m.name if m else None, "image": bool(getattr(m, "image", None))}
+                for m in seats
+            ]
+        )
 
     async def socket(websocket: WebSocket) -> None:
         # Only this page may ask: any other site open in the browser could otherwise spend the
@@ -176,20 +188,20 @@ def main(argv: list[str] | None = None) -> None:
         "--players",
         default="",
         help=f"comma-separated, one per runner: {', '.join(PLAYERS)} or bot "
-        "(default: every model with its key set, up to six, except d1; bots if none)",
+        "(default: every model with its key set, and the image twins, up to nine, except d1; bots if none)",
     )
-    parser.add_argument("--runners", type=int, help="two to six runners (default: one per player)")
+    parser.add_argument("--runners", type=int, help="two to nine runners (default: one per player)")
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--no-browser", action="store_true", help="don't open the page")
     args = parser.parse_args(argv)
     names = [n.strip().lower() for n in args.players.split(",") if n.strip()] or [
         n for n in available() if n not in ON_REQUEST
-    ][:6]
+    ][:MOST]
     if len(names) == 1:
         names.append("bot")  # a race needs two
     runners = args.runners or len(names) or 4
-    if not 2 <= runners <= 6:
-        parser.error("--runners takes 2 to 6")
+    if not 2 <= runners <= MOST:
+        parser.error(f"--runners takes 2 to {MOST}")
     if len(names) > runners:
         parser.error(f"{len(names)} players need at least {len(names)} runners")
     unknown = [n for n in names if n != "bot" and n not in PLAYERS]

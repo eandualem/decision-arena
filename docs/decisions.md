@@ -215,3 +215,44 @@ browser. Sending pixels or the raw obstacle list: decision models answer
 questions about text, and Entune's tested shape is a described state and
 described options. Saying when to jump or roll for each obstacle: that
 would be our choice, not the model's.
+
+## 6. Image twins: does seeing help?
+
+**Choice.** A model that accepts images can race twice: as itself, on the
+text question, and as its image twin, on the same text with a picture of
+what its runner sees. Both run in the same race, so a model races against
+its own twin as well as the others. The twin is named after the model with
+"image", and wears the same character in its second outfit.
+
+Four models accept images: OpenAI's GPT-6 Luna, Perplexity's decider,
+Cloudflare's Clef-flash and EmpirioLabs' Aplomb 1. Jev and Laya don't, and
+race on text as before. Each API takes the picture its own way, all checked
+with a test picture: OpenAI as an image part in a user message, Perplexity
+as an image part in `state`, Clef in an `images` field, and Aplomb as an
+image node in `state`.
+
+The picture is the runner's own view: a 512 x 288 render from just behind
+and above its runner, looking down its lanes, taken when the question is
+sent. The game draws it separately from the screen, at a size small enough
+to keep the race at full frame rate. The question's text says a picture of
+that view is attached; nothing else differs between the twins.
+
+The default race is the image twins and the text models with keys, up to
+nine runners: on a full set of keys, Jev, the four image models and their
+twins. Laya joins when there is room. Nine runners start three rows of
+three. Each race moves every runner one row back and one lane across, so
+over three races each starts once in every row and every lane. That isn't
+every slot, but it is fair by row and by lane.
+
+With more than six model runners, the decision panel shows each model's
+move and its probability, latency, decisions per second and record, without
+the five bars, so nine cards fit on the screen.
+
+**Why.** It answers the open question directly. One model with and without
+the picture shows whether seeing helps it, and the whole race shows whether
+a model that sees beats one that only reads.
+
+**Rejected.** Sending only the picture, without the text: then a twin
+differs from its model in two ways at once, and the race can't say which
+helped. The race camera's frame for every model: every model would get the
+same picture, and has to find its own runner in it.

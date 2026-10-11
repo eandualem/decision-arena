@@ -20,31 +20,41 @@ installCurvedWorld();
 
 const params = new URLSearchParams(location.search);
 
-// The runners: one per seat, each with its own character and colour.
+// The runners' characters, each with a second outfit for an image twin (or a second runner of that character).
 export const LOOKS = [
-  { character: 'zed', color: '#ff9f1c' },
-  { character: 'mira', color: '#ff4f9a' },
-  { character: 'pixel', color: '#3cc8ff' },
-  { character: 'rex', color: '#5be36b' },
-  { character: 'juno', color: '#b67dff' },
-  { character: 'koa', color: '#ffe14a' },
+  { character: 'zed', alt: 'midnight' },
+  { character: 'mira', alt: 'sunset' },
+  { character: 'pixel', alt: 'retro' },
+  { character: 'rex', alt: 'lava' },
+  { character: 'juno', alt: 'arctic' },
+  { character: 'koa', alt: 'storm' },
+  { character: 'luna', alt: 'eclipse' },
 ];
-const BOT_LAGS = [0, 0.12, 0.25, 0.4, 0.6, 0.8];   // seconds: bots of different speeds
+// One colour per seat, up to nine.
+const COLORS = ['#ff9f1c', '#ff4f9a', '#3cc8ff', '#5be36b', '#b67dff', '#ffe14a', '#ff6b5b', '#4fe3d0', '#c9d3ff'];
+const BOT_LAGS = [0, 0.12, 0.25, 0.4, 0.6, 0.8, 0.3, 0.5, 0.7];   // seconds: bots of different speeds
 
 /** One seat per runner. `players` is the server's list (one entry per seat: a model's name, or null for a
  *  bot); a model seat is named after its model and asks it through the gateway. */
 function seats(n, players) {
   const gateway = players.some((p) => p.name) ? new Gateway(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`) : null;
-  return LOOKS.slice(0, n).map((look, i) => {
-    const model = players[i]?.name;
-    return {
+  // A model and its image twin share a character, whichever is seated first; the twin wears the second outfit.
+  const base = (i) => players[i]?.name?.replace(/ image$/, '') ?? `bot ${i}`;
+  const looks = new Map();
+  for (let i = 0; i < n; i++) if (!looks.has(base(i))) looks.set(base(i), looks.size);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const model = players[i]?.name, image = !!players[i]?.image, k = looks.get(base(i));
+    const look = LOOKS[k % LOOKS.length];
+    out.push({
       name: model || look.character[0].toUpperCase() + look.character.slice(1),
-      color: look.color,
+      color: COLORS[i],
       character: look.character,
-      outfit: null,
-      controller: model ? (runner) => new ModelPlayer(runner, i, gateway) : (runner) => new Bot(runner, BOT_LAGS[i]),
-    };
-  });
+      outfit: image || k >= LOOKS.length ? look.alt : null,
+      controller: model ? (runner) => new ModelPlayer(runner, i, gateway, image) : (runner) => new Bot(runner, BOT_LAGS[i]),
+    });
+  }
+  return out;
 }
 
 /** The players the server was started with; none when the page is served without it. */
@@ -102,7 +112,7 @@ const race = ctx.game;
 const start = () => { ctx.audio.unlock?.(); race.go(); };
 const hud = new Hud(ctx, race, { onStart: start });
 const list = await players();
-const runners = Math.max(2, Math.min(6, list.length || +params.get('runners') || 4));
+const runners = Math.max(2, Math.min(9, list.length || +params.get('runners') || 4));
 race.setup(seats(runners, list));
 hud.build();
 hud._onState(race.state);
