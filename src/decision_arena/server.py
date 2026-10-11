@@ -33,10 +33,10 @@ PLAYERS: dict[str, Callable[[], Model]] = {
     "jev": apis.jev,
     "openai": apis.openai,
     "perplexity": apis.perplexity,
+    "laya": local.laya,
+    "clef": apis.clef,
     "microsoft": apis.microsoft,
     "liquid": apis.liquid,
-    "clef": apis.clef,
-    "laya": local.laya,
 }
 
 # A question every model is asked once at the start, so a key that does not work stops the
