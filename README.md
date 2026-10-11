@@ -10,7 +10,11 @@ the answer arrives, and the model is asked again straight away. A fast model
 decides several times while a slow one decides once, and the world keeps moving
 while a model thinks. You see both how well and how fast each model decides.
 
-![Five decision models racing, with the decision panel open](docs/images/race.jpg)
+[![A race between five decision models: watch it, with sound](docs/images/race-poster.jpg)](docs/race.mp4)
+
+*[Watch a race](docs/race.mp4) (28 s, with sound): Jev, OpenAI, Perplexity, Laya and Clef in
+the fifth of five races. The decision panel on the right shows each model's record from the
+first four.*
 
 ## Run it
 
@@ -210,6 +214,8 @@ same text, with the moves as a list:
 ```
 
 (The example lists two of the five choices; every request sends all five.)
+
+![The decision panel: each model's move, probabilities, latency, decisions per second and record](docs/images/race.jpg)
 
 Each model answers with its choice and a probability for each move. The
 decision panel shows both, with the model's latency and decisions per second,
