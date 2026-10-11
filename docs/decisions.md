@@ -40,7 +40,16 @@ watch and practical for only two to four players.
   another runner, or running on the train roofs above it, passes it.
 - **Crashes.** A crash knocks a runner down for 0.7 s. It then gets up and
   runs through obstacles for 2 s while it gets going again. A crash costs
-  ground rather than ending the race.
+  ground rather than ending the race. Landing from a jetpack or pogo stick
+  protects a runner the same way for under a second. Either way it blinks,
+  so a runner passing through an obstacle always shows why.
+- **No other way through.** Two cases let a runner pass a barrier untouched,
+  and neither does now. Bouncing off a train's side, while reaching a
+  barrier in the same step, skipped the barrier. Being pushed back behind
+  another runner could land a runner inside a barrier. Rail Dash forgives a
+  runner it finds already inside an obstacle, which suits one player but not
+  these two. The step is now checked again after a side bounce, and a
+  runner is only pushed back into clear space.
 - **The collapse.** The ground falls away behind the pack. The edge is at
   most 40 m behind the leader at the start, closing to 20 m, and runs a
   little slower than the runners. A runner it reaches tumbles into the

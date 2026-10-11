@@ -184,12 +184,23 @@ export class Race {
         if (mover && Math.abs(dz) < 0.45) { this._bounce(mover); continue; }
         // Who was behind before this step, so a runner that passed through another within it is the rear one.
         const rear = (a.prevZ ?? A.z) > (b.prevZ ?? B.z) ? a : b, front = rear === a ? b : a;
-        rear.b.z = front.b.z + 2 * HD + 0.12;
+        const behind = front.b.z + 2 * HD + 0.12;
+        if (this._clear(rear, behind)) rear.b.z = behind;   // never into an obstacle: its physics would forgive it
         if (this.t - (rear.bumpT ?? -9) < RACE.bumpCooldown) continue;
         rear.bumpT = this.t;
         rear.stumble('runner');
       }
     }
+  }
+
+  /** Whether a runner's body would be clear of every obstacle (except ramps, which it walks up) at z. */
+  _clear(r, z) {
+    const b = r.b, h = b.rollT > 0 ? PLAYER.rollHeight : PLAYER.height;
+    for (const c of this.ctx.level.getColliders(z - HD, z + HD, this._cols)) {
+      if (c.ramp || b.x + HW <= c.minX || b.x - HW >= c.maxX) continue;
+      if (b.y + 0.04 < c.maxY && b.y + h > c.minY) return false;
+    }
+    return true;
   }
 
   _bounce(r) {
